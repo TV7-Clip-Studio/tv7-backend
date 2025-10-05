@@ -21,7 +21,7 @@ deps:
 	@$(VENV)/bin/pre-commit install
 
 run: deps
-	$(UV) app.main:app --host 0.0.0.0 --port 8000 --reload
+	$(UV) PYTHONPATH=src app.main:app --host 0.0.0.0 --port 8000 --reload
 
 fmt:
 	$(BLACK) src tests
