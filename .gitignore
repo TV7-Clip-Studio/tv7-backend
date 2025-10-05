@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+dist/
+.coverage
+.pytest_cache/
+.env
+.env.*
+alembic/versions/__pycache__/
+.DS_Store
