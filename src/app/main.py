@@ -1,35 +1,33 @@
-# src/app/main.py
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 import importlib.metadata as importlib_metadata
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.trustedhost import TrustedHostMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from app.api.v1.routes import api_router
 from app.core.config import settings
+from app.core.errors import install_exception_handlers
 from app.core.logging import setup_logging
 from app.core.security import SecurityHeadersMiddleware
-from app.core.errors import install_exception_handlers
-from app.api.v1.routes import api_router
 from app.db.base import get_engine
 
+
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: ARG001
     # ---- Startup ----
     setup_logging()
-
-    # Touch the engine at startup to fail fast if DATABASE_URL is wrong.
-    engine = get_engine()
-    # NOTE: Do NOT create tables here; use Alembic migrations.
-    # async with engine.begin() as conn:
-    #     await conn.run_sync(Base.metadata.create_all)
+    engine = get_engine()  # touch engine to validate URL early
 
     yield
 
     # ---- Shutdown ----
     await engine.dispose()
+
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -37,12 +35,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ----- Security / Infra middleware -----
+# Security / Infra middleware
 if getattr(settings, "TRUSTED_HOSTS", None):
-    app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=settings.TRUSTED_HOSTS,
-    )
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.TRUSTED_HOSTS)
 
 app.add_middleware(SecurityHeadersMiddleware)
 
@@ -54,27 +49,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ----- Metrics -----
-# Exposes Prometheus metrics at /metrics
+# Metrics
 Instrumentator().instrument(app).expose(app)
 
-# ----- Exceptions -----
+# Exceptions
 install_exception_handlers(app)
 
-# ----- API -----
+# API
 app.include_router(api_router, prefix="/api/v1")
 
-# ----- Utility endpoints -----
+
+# Utility endpoints
 @app.get("/health")
-async def health():
+async def health() -> dict[str, str]:
     return {"status": "ok"}
 
+
 @app.get("/readyz")
-async def readyz():
+async def readyz() -> dict[str, str]:
     return {"status": "ready"}
 
+
 @app.get("/version")
-async def version():
+async def version() -> dict[str, str]:
     try:
         v = importlib_metadata.version("app")
     except importlib_metadata.PackageNotFoundError:

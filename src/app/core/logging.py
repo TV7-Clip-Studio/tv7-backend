@@ -1,4 +1,8 @@
-import logging, sys, structlog
+import logging
+import sys
+
+import structlog
+
 
 def setup_logging(level: int = logging.INFO) -> None:
     timestamper = structlog.processors.TimeStamper(fmt="iso")

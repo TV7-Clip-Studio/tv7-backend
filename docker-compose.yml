@@ -4,6 +4,8 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@postgres:5432/appdb}
+      PYTHONPATH: src
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --app-dir src
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on: [postgres]
