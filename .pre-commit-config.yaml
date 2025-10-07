@@ -10,4 +10,21 @@ repos:
     hooks: [{id: mypy, additional_dependencies: []}]
   - repo: https://github.com/PyCQA/bandit
     rev: 1.7.9
-    hooks: [{id: bandit, args: ["-r", "src"]}]
+    hooks:
+      - id: bandit
+        args: ["-r", "src"]
+        pass_filenames: false
+  - repo: local
+    hooks:
+      - id: pytest-coverage
+        name: pytest with coverage
+        entry: pytest
+        language: system
+        pass_filenames: false
+        args:
+          [
+            "--cov=src",
+            "--cov=tests",
+            "--cov-report=term-missing",
+            "--cov-fail-under=85",
+          ]
