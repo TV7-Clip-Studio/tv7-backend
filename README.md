@@ -19,3 +19,20 @@ alembic revision --autogenerate -m "init"
 alembic upgrade head
 uvicorn app.main:app --reload
 ```
+
+## Testing
+
+- Unit & fast async tests (SQLite-backed fixtures):
+  ```bash
+  make test
+  ```
+
+- Full system tests with real Postgres (requires Docker; spins up a disposable container via Testcontainers):
+  ```bash
+  make test-integration
+  # or: pytest --override-ini addopts= -p no:cov -m integration tests/integration
+  ```
+
+  By default the suite tries to start a disposable Postgres via Docker. If Docker isn't available, set
+  `TEST_DATABASE_URL` to point at a reachable Postgres instance (e.g. `postgresql+asyncpg://user:pass@host:port/db`).
+  You can also override the container image with `TEST_POSTGRES_IMAGE`.

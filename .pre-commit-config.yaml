@@ -18,13 +18,13 @@ repos:
     hooks:
       - id: pytest-coverage
         name: pytest with coverage
-        entry: pytest
+        entry: .venv/bin/python
         language: system
         pass_filenames: false
         args:
-          [
-            "--cov=src",
-            "--cov=tests",
-            "--cov-report=term-missing",
-            "--cov-fail-under=85",
-          ]
+          - "-m"
+          - pytest
+          - "--cov=src"
+          - "--cov=tests"
+          - "--cov-report=term-missing"
+          - "--cov-fail-under=85"

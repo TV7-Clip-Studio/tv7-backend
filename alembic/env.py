@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import AbstractContextManager, suppress
 from logging.config import fileConfig
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from sqlalchemy import create_engine as create_sync_engine
 from sqlalchemy import pool
@@ -47,18 +47,27 @@ target_metadata = Base.metadata
 def _sync_url_from_async(async_url: str | URL) -> str:
     """
     Alembic's engine is synchronous. Convert an async driver URL (e.g., postgresql+asyncpg)
-    to a sync one (postgresql+psycopg).
+    to a sync one (postgresql+psycopg) preserving credentials.
     """
-    url = make_url(async_url)
-    # Normalize to psycopg (v3) sync driver
+    url = make_url(str(async_url))
     url = url.set(drivername="postgresql+psycopg")
-    return str(url)
+    return cast(str, url.render_as_string(hide_password=False))
+
+
+def _get_sync_database_url() -> str:
+    """
+    Prefer an explicit override provided via alembic.ini (set by tests) before
+    falling back to the application settings.
+    """
+    override = cast(str | None, config.get_main_option("sqlalchemy.url"))
+    if override:
+        return override
+    return _sync_url_from_async(settings.DATABASE_URL)
 
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
-    async_url = settings.DATABASE_URL
-    sync_url = _sync_url_from_async(async_url)
+    sync_url = _get_sync_database_url()
 
     context.configure(
         url=sync_url,
@@ -74,8 +83,7 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
-    async_url = settings.DATABASE_URL
-    sync_url = _sync_url_from_async(async_url)
+    sync_url = _get_sync_database_url()
 
     connectable = create_sync_engine(sync_url, poolclass=pool.NullPool)
 

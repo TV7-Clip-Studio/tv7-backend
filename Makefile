@@ -12,7 +12,8 @@ COMPOSE ?= docker compose
 API_PORT ?= 8000
 
 .PHONY: deps run test testcov fmt lint type sec precommit \
-        revision upgrade downgrade migrate up down logs dev smoke
+        revision upgrade downgrade migrate up down logs dev smoke \
+        test-integration
 
 deps:
 	@[ -d $(VENV) ] || python -m venv $(VENV)
@@ -42,6 +43,9 @@ test:
 
 testcov:
 	$(PYTEST) -q --cov=src --cov-report=term-missing
+
+test-integration:
+	$(PYTEST) --override-ini addopts= -p no:cov -m integration tests/integration
 
 revision:
 	@if [ -z "$(m)" ]; then echo "Use: make revision m='message'"; exit 1; fi
