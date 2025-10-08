@@ -3,7 +3,14 @@ from __future__ import annotations
 from http import HTTPStatus
 
 import pytest
+from fastapi import HTTPException
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.v1 import users as users_api
+from app.core.security import verify_password
+from app.db.models import User
+from app.schemas import UserCreate
 
 pytestmark = pytest.mark.asyncio
 
@@ -27,9 +34,15 @@ async def test_create_user(async_client: AsyncClient) -> None:
     assert body["email"] == payload["email"]
     assert body["full_name"] == payload["full_name"]
     assert isinstance(body["id"], int)
+    assert body["is_active"] is True
+    assert "created_at" in body
+    assert "updated_at" in body
+    assert "password_hash" not in body
 
     list_response = await async_client.get("/api/v1/users/")
-    assert any(user["email"] == payload["email"] for user in list_response.json())
+    users = list_response.json()
+    assert any(user["email"] == payload["email"] for user in users)
+    assert all("password_hash" not in user for user in users)
 
 
 async def test_create_user_conflict(async_client: AsyncClient) -> None:
@@ -46,3 +59,36 @@ async def test_create_user_conflict(async_client: AsyncClient) -> None:
     assert conflict.json() == {
         "error": {"code": HTTPStatus.CONFLICT, "message": "Email already in use"}
     }
+
+
+async def test_create_user_hashes_password(
+    async_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    payload = {
+        "email": "bob@example.com",
+        "full_name": "Bob Example",
+        "password": "bob-secret",
+    }
+    response = await async_client.post("/api/v1/users/", json=payload)
+    assert response.status_code == HTTPStatus.CREATED
+    body = response.json()
+
+    user = await db_session.get(User, body["id"])
+    assert user is not None
+    assert user.password_hash != payload["password"]
+    assert verify_password(payload["password"], user.password_hash)
+
+
+async def test_create_user_direct_call(db_session: AsyncSession) -> None:
+    payload = UserCreate(
+        email="direct@example.com",
+        full_name="Direct User",
+        password="direct-secret",
+    )
+    user = await users_api.create_user(payload, db_session)
+    assert user.email == payload.email
+    assert verify_password(payload.password, user.password_hash)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await users_api.create_user(payload, db_session)
+    assert exc_info.value.status_code == HTTPStatus.CONFLICT

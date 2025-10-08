@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import hash_password
 from app.db.base import session_scope
 from app.db.models import User
 from app.schemas import UserCreate, UserRead
@@ -35,8 +36,9 @@ async def create_user(payload: UserCreate, db: AsyncSession = Depends(get_db)) -
     obj = User(
         email=payload.email,
         full_name=payload.full_name,
-        password_hash=payload.password,
+        password_hash=hash_password(payload.password),
     )
     db.add(obj)
     await db.flush()
+    await db.refresh(obj)
     return obj

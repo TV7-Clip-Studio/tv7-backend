@@ -27,9 +27,15 @@ async def test_create_user(async_client: AsyncClient) -> None:
     assert body["email"] == payload["email"]
     assert body["full_name"] == payload["full_name"]
     assert isinstance(body["id"], int)
+    assert body["is_active"] is True
+    assert "created_at" in body
+    assert "updated_at" in body
+    assert "password_hash" not in body
 
     listing = await async_client.get("/api/v1/users/")
-    assert any(user["email"] == payload["email"] for user in listing.json())
+    users = listing.json()
+    assert any(user["email"] == payload["email"] for user in users)
+    assert all("password_hash" not in user for user in users)
 
 
 async def test_create_user_conflict(async_client: AsyncClient) -> None:
