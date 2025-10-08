@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from http import HTTPStatus
 from importlib import metadata as importlib_metadata
 
@@ -12,29 +13,42 @@ from app.core.config import settings
 pytestmark = pytest.mark.asyncio
 
 
+def _raise_package_not_found(_: str) -> str:
+    raise importlib_metadata.PackageNotFoundError
+
+
 async def test_readyz(async_client: AsyncClient) -> None:
     response = await async_client.get("/readyz")
     assert response.status_code == HTTPStatus.OK
     assert response.json() == {"status": "ready"}
 
 
-async def test_version_package_missing(async_client: AsyncClient, monkeypatch: MonkeyPatch) -> None:
-    def _raise(_: str) -> str:
-        raise importlib_metadata.PackageNotFoundError
-
-    monkeypatch.setattr(importlib_metadata, "version", _raise)
+@pytest.mark.parametrize(
+    ("stub", "expected"),
+    [
+        pytest.param(
+            _raise_package_not_found,
+            {"version": settings.VERSION},
+            id="package-missing",
+        ),
+        pytest.param(
+            lambda _: "1.2.3",
+            {"version": "1.2.3"},
+            id="package-present",
+        ),
+    ],
+)
+async def test_version_endpoint(
+    async_client: AsyncClient,
+    monkeypatch: MonkeyPatch,
+    stub: Callable[[str], str],
+    expected: dict[str, str],
+) -> None:
+    monkeypatch.setattr(importlib_metadata, "version", stub)
 
     response = await async_client.get("/version")
     assert response.status_code == HTTPStatus.OK
-    assert response.json() == {"version": settings.VERSION}
-
-
-async def test_version_package_present(async_client: AsyncClient, monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.setattr(importlib_metadata, "version", lambda _: "1.2.3")
-
-    response = await async_client.get("/version")
-    assert response.status_code == HTTPStatus.OK
-    assert response.json() == {"version": "1.2.3"}
+    assert response.json() == expected
 
 
 async def test_security_headers_present(async_client: AsyncClient) -> None:
