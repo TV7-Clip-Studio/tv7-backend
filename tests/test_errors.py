@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Awaitable
 from http import HTTPStatus
+from typing import Any, cast
 
 import pytest
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from pydantic import BaseModel, ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -23,14 +25,21 @@ class _Payload(BaseModel):
     number: int
 
 
+async def _resolve_response(result: Response | Awaitable[Response]) -> Response:
+    if isinstance(result, Response):
+        return result
+    return await cast(Awaitable[Response], result)
+
+
 async def test_http_exception_handler() -> None:
     app = _build_app()
     handler = app.exception_handlers[StarletteHTTPException]  # type: ignore[index]
     request = Request({"type": "http"})
 
-    response = await handler(
+    raw_response = handler(
         request, StarletteHTTPException(status_code=418, detail="short and stout")
     )
+    response = await _resolve_response(raw_response)
 
     assert response.status_code == 418
     assert json.loads(response.body.decode()) == {
@@ -44,9 +53,10 @@ async def test_validation_exception_handler() -> None:
     request = Request({"type": "http"})
 
     with pytest.raises(ValidationError) as exc_info:
-        _Payload(number="invalid")
+        _Payload(number=cast(Any, "invalid"))
 
-    response = await handler(request, exc_info.value)
+    raw_response = handler(request, exc_info.value)
+    response = await _resolve_response(raw_response)
     payload = json.loads(response.body.decode())
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
@@ -60,7 +70,8 @@ async def test_generic_exception_handler() -> None:
     handler = app.exception_handlers[Exception]  # type: ignore[index]
     request = Request({"type": "http"})
 
-    response = await handler(request, RuntimeError("boom"))
+    raw_response = handler(request, RuntimeError("boom"))
+    response = await _resolve_response(raw_response)
 
     assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
     assert json.loads(response.body.decode()) == {
