@@ -1,4 +1,4 @@
-"""create users
+"""Placeholder migration to preserve the expected revision chain.
 
 Revision ID: b8ab13ac8612
 Revises: fd1f093acad5
@@ -12,8 +12,10 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # No schema changes required; revision maintained for compatibility.
     pass
 
 
 def downgrade() -> None:
+    # No schema changes introduced in this revision.
     pass

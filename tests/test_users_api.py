@@ -15,7 +15,11 @@ async def test_list_users_initially_empty(async_client: AsyncClient) -> None:
 
 
 async def test_create_user(async_client: AsyncClient) -> None:
-    payload = {"email": "alice@example.com", "full_name": "Alice Example"}
+    payload = {
+        "email": "alice@example.com",
+        "full_name": "Alice Example",
+        "password": "alice-secret",
+    }
     response = await async_client.post("/api/v1/users/", json=payload)
     body = response.json()
 
@@ -29,7 +33,11 @@ async def test_create_user(async_client: AsyncClient) -> None:
 
 
 async def test_create_user_conflict(async_client: AsyncClient) -> None:
-    payload = {"email": "duplicate@example.com", "full_name": "Duplicate User"}
+    payload = {
+        "email": "duplicate@example.com",
+        "full_name": "Duplicate User",
+        "password": "duplicate-secret",
+    }
     first = await async_client.post("/api/v1/users/", json=payload)
     assert first.status_code == HTTPStatus.CREATED
 

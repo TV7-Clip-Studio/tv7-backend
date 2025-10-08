@@ -32,7 +32,11 @@ async def create_user(payload: UserCreate, db: AsyncSession = Depends(get_db)) -
     ).scalar_one_or_none()
     if exists:
         raise HTTPException(409, "Email already in use")
-    obj = User(email=payload.email, full_name=payload.full_name)
+    obj = User(
+        email=payload.email,
+        full_name=payload.full_name,
+        password_hash=payload.password,
+    )
     db.add(obj)
     await db.flush()
     return obj

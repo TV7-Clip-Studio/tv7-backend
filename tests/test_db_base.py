@@ -63,7 +63,13 @@ async def test_session_scope_commit(patched_base: PatchedBase) -> None:
     db_base, session_factory = patched_base
 
     async with db_base.session_scope() as session:
-        session.add(User(email="commit@example.com", full_name="Commit User"))
+        session.add(
+            User(
+                email="commit@example.com",
+                full_name="Commit User",
+                password_hash="hashed-secret",
+            )
+        )
 
     async with session_factory() as session:
         rows = (await session.execute(select(User))).scalars().all()
@@ -77,7 +83,13 @@ async def test_session_scope_rollback(patched_base: PatchedBase) -> None:
 
     with pytest.raises(RuntimeError):
         async with db_base.session_scope() as session:
-            session.add(User(email="rollback@example.com", full_name="Rollback User"))
+            session.add(
+                User(
+                    email="rollback@example.com",
+                    full_name="Rollback User",
+                    password_hash="hashed-secret",
+                )
+            )
             raise RuntimeError("trigger rollback")
 
     async with session_factory() as session:
