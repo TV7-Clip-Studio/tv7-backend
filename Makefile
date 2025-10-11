@@ -10,9 +10,12 @@ BANDIT := $(VENV)/bin/bandit
 ALEMBIC := $(VENV)/bin/alembic
 COMPOSE ?= docker compose
 API_PORT ?= 8000
+FLY_APP ?= forgotten-app
+FLY_DOMAIN ?= $(FLY_APP).fly.dev
 
 .PHONY: deps run test testcov fmt lint type sec precommit \
         revision upgrade downgrade migrate up down logs dev smoke \
+        smoke-fly \
         test-integration
 
 deps:
@@ -77,3 +80,7 @@ smoke:
 	curl -s -X POST http://localhost:8000/api/v1/users -H "Content-Type: application/json" -d '{"email":"smoke@example.com","full_name":"Smoke Test"}' | jq . ; \
 	curl -s http://localhost:8000/api/v1/users | jq . ; \
 	curl -s http://localhost:8000/metrics | head -n 5
+
+smoke-fly:
+	@echo "Checking Fly health endpoint for $(FLY_APP)" ; \
+	curl -fsS https://$(FLY_DOMAIN)/health | jq .

@@ -1,0 +1,18 @@
+app = "forgotten-app"
+primary_region = "gru"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "512mb"
+
+[[mounts]]
+  source = "forgotten_data"
+  destination = "/data"

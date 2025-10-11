@@ -1,79 +1,70 @@
-from __future__ import annotations
-
-from contextlib import AbstractContextManager, suppress
+import os
+from contextlib import suppress
+from importlib import import_module
 from logging.config import fileConfig
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import Any, cast
 
-from sqlalchemy import create_engine as create_sync_engine
-from sqlalchemy import pool
-from sqlalchemy.engine import URL, make_url
+from alembic.config import Config
+from sqlalchemy import engine_from_config, pool
+from sqlalchemy.engine import make_url
 
-from app.core.config import settings
-
-# Import your Base and settings from the app
-from app.db.models import Base  # ensure this points to where your models' metadata lives
-
-if TYPE_CHECKING:
-    from alembic.config import Config
-
-    class AlembicContext(Protocol):
-        config: Config
-
-        def begin_transaction(self) -> AbstractContextManager[None]: ...
-
-        def configure(self, *args: Any, **kwargs: Any) -> None: ...
-
-        def run_migrations(self) -> None: ...
-
-        def is_offline_mode(self) -> bool: ...
-
-    context: AlembicContext
-else:
-    from alembic import context  # type: ignore[attr-defined]
+from app.db.models import Base
 
 # this is the Alembic Config object, which provides access to the values within the .ini file.
-config = context.config
+alembic_module = import_module("alembic")
+context = cast(Any, alembic_module.context)
+config: Config = context.config
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
+# Interpret the config file for Python logging when logging sections exist.
 if config.config_file_name is not None and config.get_section("loggers"):
     with suppress(Exception):
-        fileConfig(config.config_file_name)  # type: ignore[arg-type]
+        fileConfig(config.config_file_name)
 
-# Add your model's MetaData object here for 'autogenerate' support
+# Add your model's MetaData object here for 'autogenerate' support.
 target_metadata = Base.metadata
 
 
-def _sync_url_from_async(async_url: str | URL) -> str:
-    """
-    Alembic's engine is synchronous. Convert an async driver URL (e.g., postgresql+asyncpg)
-    to a sync one (postgresql+psycopg) preserving credentials.
-    """
-    url = make_url(str(async_url))
-    url = url.set(drivername="postgresql+psycopg")
-    return cast(str, url.render_as_string(hide_password=False))
+db_url = os.getenv("DATABASE_URL")
+if db_url:
+    config.set_main_option("sqlalchemy.url", db_url)
 
 
-def _get_sync_database_url() -> str:
-    """
-    Prefer an explicit override provided via alembic.ini (set by tests) before
-    falling back to the application settings.
-    """
-    override = cast(str | None, config.get_main_option("sqlalchemy.url"))
-    if override:
-        return override
-    return _sync_url_from_async(settings.DATABASE_URL)
+def _resolve_sqlalchemy_url() -> str:
+    url = config.get_main_option("sqlalchemy.url")
+    if not url or url == "${DATABASE_URL}":
+        raise RuntimeError(
+            "DATABASE_URL is not set for Alembic; set the environment variable or provide a value."
+        )
+
+    url_obj = make_url(url)
+    if url_obj.database:
+        base_dir = os.path.dirname(url_obj.database)
+        if base_dir and not os.path.exists(base_dir):
+            os.makedirs(base_dir, exist_ok=True)
+
+    driver = url_obj.drivername
+    if driver.endswith("+aiosqlite"):
+        url_obj = url_obj.set(drivername="sqlite+pysqlite")
+    elif driver.endswith("+asyncpg"):
+        url_obj = url_obj.set(drivername="postgresql+psycopg")
+    elif driver.endswith("+asyncmy"):
+        url_obj = url_obj.set(drivername="mysql+pymysql")
+
+    resolved = str(url_obj.render_as_string(hide_password=False))
+    config.set_main_option("sqlalchemy.url", resolved)
+    return resolved
 
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
-    sync_url = _get_sync_database_url()
+    url = _resolve_sqlalchemy_url()
 
     context.configure(
-        url=sync_url,
+        url=url,
         target_metadata=target_metadata,
         literal_binds=True,
         compare_type=True,
+        render_as_batch=True,
         dialect_opts={"paramstyle": "named"},
     )
 
@@ -83,15 +74,22 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
-    sync_url = _get_sync_database_url()
+    _resolve_sqlalchemy_url()
 
-    connectable = create_sync_engine(sync_url, poolclass=pool.NullPool)
+    section = cast(dict[str, Any], config.get_section(config.config_ini_section) or {})
+
+    connectable = engine_from_config(
+        section,
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
 
     with connectable.connect() as connection:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
+            render_as_batch=True,
         )
 
         with context.begin_transaction():

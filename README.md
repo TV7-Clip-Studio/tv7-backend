@@ -7,7 +7,7 @@ Fixes included:
 - SQLAlchemy engine casts URL to `str()`.
 - Prometheus instrumentator added outside lifespan.
 - Docker Compose without `version`, and configurable port `${API_PORT:-8000}`.
-- Makefile targets: `dev` (hybrid), `up`/`down`, `smoke`.
+- Makefile targets: `dev` (hybrid), `up`/`down`, `smoke`, `smoke-fly`.
 
 ## Quickstart (local app + Docker Postgres)
 ```bash
@@ -18,6 +18,23 @@ docker compose up -d postgres
 alembic revision --autogenerate -m "init"
 alembic upgrade head
 uvicorn app.main:app --reload
+```
+
+## Environment
+
+- `BETA_API_KEY` enables the beta API guard (required for `/api/v1/ai` locally and in Fly secrets).
+- Optional AgentKit integration uses `AGENTKIT_URL` and `AGENTKIT_API_KEY`.
+
+## Fly smoke test
+
+Deploying to Fly? After `fly deploy`, run:
+
+```bash
+make smoke-fly            # hits https://forgotten-app.fly.dev/health
+curl -s -X POST https://forgotten-app.fly.dev/api/v1/ai/execute \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: $BETA_API_KEY" \
+  -d '{"input":"hello"}'
 ```
 
 ## Testing
