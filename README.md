@@ -37,6 +37,24 @@ curl -s -X POST https://forgotten-app.fly.dev/api/v1/ai/execute \
   -d '{"input":"hello"}'
 ```
 
+## Fly "Safe Mode" (cap cost)
+
+Keep the app on a single tiny Machine so spend never spikes:
+
+```bash
+# one-time setup
+fly scale vm shared-cpu-1x -a forgotten-app
+fly scale memory 256 -a forgotten-app
+fly scale count 1 -a forgotten-app
+
+# panic button / go offline instantly
+fly scale count 0 -a forgotten-app
+# bring it back later
+fly scale count 1 -a forgotten-app
+```
+
+`fly.toml` already sets 10/20 connection limits and auto-stop, so the app parks itself when idle.
+
 ## Testing
 
 - Unit & fast async tests (SQLite-backed fixtures):

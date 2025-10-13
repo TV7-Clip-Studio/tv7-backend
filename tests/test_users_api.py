@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Generator
 from http import HTTPStatus
 
 import pytest
@@ -15,8 +16,14 @@ from app.schemas import UserCreate
 pytestmark = pytest.mark.asyncio
 
 
+@pytest.fixture(autouse=True)
+def beta_key(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
+    monkeypatch.setenv("BETA_API_KEY", "test-beta-key")
+    yield
+
+
 async def test_list_users_initially_empty(async_client: AsyncClient) -> None:
-    response = await async_client.get("/api/v1/users/")
+    response = await async_client.get("/api/v1/users/", headers={"X-API-Key": "test-beta-key"})
     assert response.status_code == HTTPStatus.OK
     assert response.json() == []
 
@@ -27,7 +34,9 @@ async def test_create_user(async_client: AsyncClient) -> None:
         "full_name": "Alice Example",
         "password": "alice-secret",
     }
-    response = await async_client.post("/api/v1/users/", json=payload)
+    response = await async_client.post(
+        "/api/v1/users/", json=payload, headers={"X-API-Key": "test-beta-key"}
+    )
     body = response.json()
 
     assert response.status_code == HTTPStatus.CREATED
@@ -39,7 +48,7 @@ async def test_create_user(async_client: AsyncClient) -> None:
     assert "updated_at" in body
     assert "password_hash" not in body
 
-    list_response = await async_client.get("/api/v1/users/")
+    list_response = await async_client.get("/api/v1/users/", headers={"X-API-Key": "test-beta-key"})
     users = list_response.json()
     assert any(user["email"] == payload["email"] for user in users)
     assert all("password_hash" not in user for user in users)
@@ -51,10 +60,14 @@ async def test_create_user_conflict(async_client: AsyncClient) -> None:
         "full_name": "Duplicate User",
         "password": "duplicate-secret",
     }
-    first = await async_client.post("/api/v1/users/", json=payload)
+    first = await async_client.post(
+        "/api/v1/users/", json=payload, headers={"X-API-Key": "test-beta-key"}
+    )
     assert first.status_code == HTTPStatus.CREATED
 
-    conflict = await async_client.post("/api/v1/users/", json=payload)
+    conflict = await async_client.post(
+        "/api/v1/users/", json=payload, headers={"X-API-Key": "test-beta-key"}
+    )
     assert conflict.status_code == HTTPStatus.CONFLICT
     assert conflict.json() == {
         "error": {"code": HTTPStatus.CONFLICT, "message": "Email already in use"}
@@ -69,7 +82,9 @@ async def test_create_user_hashes_password(
         "full_name": "Bob Example",
         "password": "bob-secret",
     }
-    response = await async_client.post("/api/v1/users/", json=payload)
+    response = await async_client.post(
+        "/api/v1/users/", json=payload, headers={"X-API-Key": "test-beta-key"}
+    )
     assert response.status_code == HTTPStatus.CREATED
     body = response.json()
 
