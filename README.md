@@ -55,6 +55,10 @@ fly scale count 1 -a forgotten-app
 
 `fly.toml` already sets 10/20 connection limits and auto-stop, so the app parks itself when idle.
 
+### Managed Postgres (Neon)
+
+We host production/staging Postgres on Neon. The full setup guide—covering pooler vs. direct endpoints, environment variables, Fly secrets, and migration commands—lives in `docs/neon_postgres.md`. Consult that document when provisioning or rotating credentials.
+
 ## Testing
 
 - Unit & fast async tests (SQLite-backed fixtures):

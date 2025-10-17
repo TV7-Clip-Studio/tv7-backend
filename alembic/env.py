@@ -24,16 +24,21 @@ if config.config_file_name is not None and config.get_section("loggers"):
 target_metadata = Base.metadata
 
 
-db_url = os.getenv("DATABASE_URL")
-if db_url:
-    config.set_main_option("sqlalchemy.url", db_url)
+db_admin_url = os.getenv("DATABASE_ADMIN_URL")
+if db_admin_url:
+    config.set_main_option("sqlalchemy.url", db_admin_url)
+else:
+    db_url = os.getenv("DATABASE_URL")
+    if db_url:
+        config.set_main_option("sqlalchemy.url", db_url)
 
 
 def _resolve_sqlalchemy_url() -> str:
     url = config.get_main_option("sqlalchemy.url")
-    if not url or url == "${DATABASE_URL}":
+    if not url or url in {"${DATABASE_ADMIN_URL}", "${DATABASE_URL}"}:
         raise RuntimeError(
-            "DATABASE_URL is not set for Alembic; set the environment variable or provide a value."
+            "DATABASE_ADMIN_URL (or fallback DATABASE_URL) is not set for Alembic; "
+            "export it before running migrations."
         )
 
     url_obj = make_url(url)
