@@ -1,44 +1,50 @@
-# AgentForge Agent Best Practices
+# Shorts Factory Agent Best Practices
 
-This guide codifies expectations for autonomous or semi-autonomous coding agents working on the AgentForge backend. The goal is to keep contributions predictable, reviewable, and production ready.
+This guide keeps autonomous or semi-autonomous contributors aligned while evolving the FastAPI YouTube → Shorts pipeline. Treat it as the contract for day-to-day execution.
 
 ## Core Principles
-- **Human-first readability:** Write code and documentation that a teammate can understand on first pass. Favour descriptive names, small functions, and sparse but meaningful comments.
-- **Architecture alignment:** Reuse existing patterns, helpers, and module layouts instead of inventing new styles. Any deliberate deviation should be justified with an RFC-style note.
-- **Security & cost awareness:** Enforce auth, rate limits, and budget checks on every new execution path. Never bypass guardrails in “temporary” code.
-- **Observability everywhere:** Emit metrics/logs/traces for new features, keeping the `trace_id` contract intact.
+- **Operator-first clarity:** Code, docs, and admin views must be easy for a human operator to run and debug. Prefer explicit naming, small modules, and comments only when they add real insight.
+- **Single-service mindset:** Build every feature (API, UI, workers) inside this FastAPI project unless the roadmap explicitly calls for a new service.
+- **Secure by default:** Enforce auth, rate limits, and admin protections on new routes. Never introduce “temporary” unauthenticated paths.
+- **Pipeline observability:** Every stage (download → highlights → render → publish) must log key events and be measurable.
 
 ## Development Workflow
-1. **Plan before you code:** Write an implementation plan before doing big and medium tasks (for small tasks agents can apply changes directly)
-2. **Sync with configuration:** Update env vars, Alembic migrations, and docs when schema or settings change. No hard-coded secrets.
-3. **Tests are mandatory:** Extend the pytest suite (unit + integration). Keep SQLite fixtures for unit tests; use Testcontainers for DB-dependent integration.
-4. **Local validation:** Run `make test` and relevant targeted commands (`make lint`, `make typecheck`, `make test-integration`) before submitting changes.
-5. **Document risks:** Note any known gaps, TODOs, or deferred work in the PR description and, when long-lived, in the `docs/` knowledge base.
+1. **Plan before coding:** For medium/large tasks, outline the approach (data model changes, workers, APIs) before touching code. Keep plans alongside PRs/issues.
+2. **Sync configuration:** When you add settings, migrations, or background workers, update `.env.example`, Alembic revisions, and docs. No hard-coded secrets or paths.
+3. **Guard the request path:** Long-running or CPU-heavy work belongs in background tasks. If you must block, document why and add TODOs for follow-up.
+4. **Test locally:** Run `make fmt`, `make lint`, `make type`, `make testcov`, and relevant targeted tests before opening a PR. Use `make worker` (once added) to exercise pipelines end-to-end.
+5. **Update documentation:** Keep `docs/architecture.md`, `docs/roadmap.md`, and `docs/roadmap_rationale.md` current when behavior changes. Mention operational impacts in `README.md`.
 
 ## Coding Standards
-- **Python style:** Follow Ruff defaults and `pyproject.toml` settings. Avoid clever one-liners; prefer clarity over terseness.
-- **Schema rigor:** Use Pydantic models for request/response validation. Ensure new endpoints have OpenAPI docstrings and typed responses.
-- **Error handling:** Always map exceptions through the central error layer; return the canonical JSON error shape.
-- **Database interactions:** Use SQLAlchemy 2.0 style (select/execute) with async session patterns. All migrations go through Alembic.
-- **Concurrency:** Respect async/await boundaries. No blocking calls within async endpoints.
+- **FastAPI conventions:** Use Pydantic models for input/output. Add descriptive tags and summaries so `/docs` stays polished.
+- **SQLAlchemy + Alembic:** Stick to SQLAlchemy 2.0 async patterns. Generate and commit migrations alongside model changes.
+- **Services module layout:** Place pipeline logic under `src/app/services/` (downloader, highlight detector, clipper, subtitle styler, publisher). Keep functions composable and testable.
+- **Error handling:** Route exceptions through `app.core.errors` helpers. Always return the canonical JSON error format for API responses.
+- **Type safety:** Maintain typing discipline; rely on Ruff+MyPy defaults from `pyproject.toml`. Avoid `Any` unless absolutely necessary and justified in comments.
 
-## Observability & Operations
-- **Metrics:** Register Prometheus counters/histograms for new action types or background jobs.
-- **Logging:** Use structured logs with log level context; include `trace_id`, action slug, and key ID where applicable.
-- **Tracing:** Persist traces for all user-visible operations. Redact sensitive fields before storage.
-- **Runbooks:** Update `README.md` or dedicated docs when new operational tasks are introduced (cron jobs, branches, retention scripts).
+## Background Pipeline Guardrails
+- **Idempotency:** Ensure tasks can be retried without corrupting state (e.g., safe updates, temp file cleanup).
+- **Status transitions:** Update `Video.status`, `Clip.status`, and `PublishJob.status` atomically and document the life cycles in code comments/tests.
+- **Resource hygiene:** Manage temp directories, large file downloads, and ffmpeg processes carefully. Add cleanup hooks when introducing new temp artifacts.
+- **LLM usage:** Prompt for machine-readable output, validate responses strictly, and log raw results for debugging (redacting secrets).
+
+## Operations & Observability
+- **Metrics & logs:** Extend Prometheus counters/histograms and structured logging when building new stages. Include `video_id` / `clip_id` / `job_id` in log contexts.
+- **Admin access:** Use the roadmap’s admin auth scaffolding (`require_admin` + `ADMIN_USERNAME`/`ADMIN_PASSWORD`). Never deploy a dashboard without protection.
+- **Deployment parity:** Verify local Docker/Compose and Fly.io configurations stay in sync. Update Makefile and docs when new processes (workers, cron) are introduced.
+- **Runbooks:** Capture operational steps (rotating admin access, seeding models, troubleshooting workers) in `docs/` as you add features.
 
 ## Collaboration Etiquette
-- Summaries should highlight intent, impact, and testing performed.
-- Reference related documents or tickets. The `docs/` directory is the living source of truth—consult it before changes and update it when behaviour shifts.
-- Flag TODOs explicitly with `TODO(name)` so ownership is clear.
-- Keep PRs/commits scoped; large refactors require design approval.
+- Keep PRs focused and well-described (intent, impact, testing). Call out risks or follow-ups explicitly.
+- Reference relevant roadmap/rationale items so reviewers can trace decisions.
+- Use `TODO(name)` annotations to assign future work when you must defer.
+- When in doubt, ask for clarification before re-architecting core pieces.
 
-## Appendix: Quick Checklist
-- [ ] Plan written and linked.
-- [ ] Code aligned with architecture/MVP docs.
-- [ ] Auth, rate limit, and budget checks enforced.
-- [ ] Metrics/logging/tracing updated.
-- [ ] Tests added/updated; `make test` run.
-- [ ] Docs updated (README, architecture, or MVP as needed).
-- [ ] Risks and follow-ups documented.
+## Quick Checklist
+- [ ] Implementation plan captured.
+- [ ] Code follows FastAPI + service module patterns.
+- [ ] Auth/rate limits/admin guardrails applied.
+- [ ] Background work is non-blocking and idempotent.
+- [ ] Metrics/logs/tests updated; `make testcov` passes.
+- [ ] Docs and runbooks refreshed.
+- [ ] Risks and follow-ups documented for operators.

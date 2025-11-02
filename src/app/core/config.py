@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 from pydantic import AnyUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -12,7 +14,11 @@ class Settings(BaseSettings):
     VERSION: str = "0.1.0"
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
     TRUSTED_HOSTS: list[str] = ["*"]
-    DATABASE_URL: AnyUrl = "postgresql+asyncpg://postgres:postgres@localhost:5432/appdb"
+    DATABASE_URL: AnyUrl = cast(
+        AnyUrl, "postgresql+asyncpg://postgres:postgres@localhost:5432/appdb"
+    )
+    ADMIN_USERNAME: str | None = None
+    ADMIN_PASSWORD: str | None = None
 
 
 settings = Settings()
