@@ -24,6 +24,10 @@ uvicorn app.main:app --reload
 
 - `BETA_API_KEY` enables the beta API guard (required for `/api/v1/ai` locally and in Fly secrets).
 - Optional AgentKit integration uses `AGENTKIT_URL` and `AGENTKIT_API_KEY`.
+- Dramatiq worker settings:
+  - `REDIS_URL` (default `redis://localhost:6379/0` locally; `redis://redis:6379/0` in Docker).
+  - `DRAMATIQ_BROKER` (`stub` for tests/standalone dev, `redis` when the queue is available).
+  - `WORKER_CONCURRENCY` controls the worker pool size.
 
 ## Admin dashboard credentials
 
@@ -31,6 +35,16 @@ uvicorn app.main:app --reload
 - The command writes `ADMIN_USERNAME`/`ADMIN_PASSWORD` to `.env`, syncs them to Fly via `fly secrets set` (requires `fly` CLI logged in), and prints the values for reference.
 - If the Fly sync fails or you skipped the Make target, set secrets manually: `fly secrets set ADMIN_USERNAME=... ADMIN_PASSWORD=... -a $FLY_APP`.
 - Redeploy after updating secrets so the FastAPI app picks up the new credentials.
+
+### Background worker
+
+Run the Dramatiq worker alongside Redis:
+
+```bash
+docker compose up redis worker  # launches queue + worker
+# or, with a stub broker for quick smoke tests:
+DRAMATIQ_BROKER=stub make worker
+```
 
 ## Fly smoke test
 

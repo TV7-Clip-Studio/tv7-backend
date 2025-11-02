@@ -17,6 +17,8 @@ dependencies = [
   "psycopg[binary]>=3.2",
   "alembic>=1.14",
   "passlib[bcrypt]>=1.7",
+  "dramatiq[redis]>=1.16",
+  "redis>=5.0",
 ]
 
 [project.optional-dependencies]

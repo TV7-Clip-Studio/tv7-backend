@@ -81,10 +81,10 @@
 - **Implementation overview:** Added `/api/v1/videos/ingest` (protected by the beta key) that accepts a YouTube URL, validates the domain, upserts a `Video` row with `status=ingested`, and hands off to `services.ingest.enqueue_video` (placeholder until Phase 1.3). Responses include the Pydantic `VideoRead` payload plus `created/queued` flags.
 - **Important:** Duplicate submissions re-queue existing videos without creating new rows. Validation rejects non-YouTube URLs with 422. The enqueue function currently logs; replace with real queue dispatch during Phase 1.3.
 
-### 1.3 — Background execution infrastructure
-- **Why:** Downloading and rendering videos is CPU-bound; requests must not block.
-- **Implementation overview:** Choose queue (Dramatiq + Redis, Celery + Redis, or RQ) or leverage async worker pattern. Define an orchestrator task that runs the pipeline sequentially with structured logging.
-- **Important:** Plan deployment: Fly background worker, Docker Compose worker service, and local dev commands (`make worker`). Ensure tasks are retryable with exponential backoff.
+### 1.3 — Background execution infrastructure (Dramatiq + Redis) ✅
+- **Why:** Downloading and rendering videos is CPU-bound; requests must not block. We need durable background processing with retries and observability.
+- **Implementation overview:** Introduced Dramatiq with Redis broker (`REDIS_URL`, `DRAMATIQ_BROKER`, `WORKER_CONCURRENCY`), added `scripts/run_worker.py`, and wired Docker Compose/Fly to run a dedicated worker alongside Redis. `app/services/tasks.py` defines actors (`process_video`, `download_video`, `detect_highlights`, `finalize_video`) that currently stub downstream work but drive the state machine (`ingested` → `processing` → `ready`). `services/ingest.enqueue_video` now enqueues the orchestrator actor. Tests cover status transitions and enqueue behavior.
+- **Important:** Placeholder actors log and update database state; modules 1.4–1.7 will replace the stubs with real implementations. Operators should launch Redis + worker locally via `docker compose up redis worker` or `make worker` (stub broker). Fly deployment now includes a worker process group; ensure Redis credentials are configured in secrets.
 
 ### 1.4 — `services/youtube_downloader.py`
 - **Why:** Provides deterministic retrieval of source media and transcripts.

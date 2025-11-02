@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     )
     ADMIN_USERNAME: str | None = None
     ADMIN_PASSWORD: str | None = None
+    REDIS_URL: str = "redis://localhost:6379/0"
+    DRAMATIQ_BROKER: str = "stub"
+    WORKER_CONCURRENCY: int = 4
 
 
 settings = Settings()

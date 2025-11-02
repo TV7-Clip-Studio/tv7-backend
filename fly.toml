@@ -20,3 +20,7 @@ primary_region = "gru"
 [[mounts]]
   source = "forgotten_data"
   destination = "/data"
+
+[[processes]]
+  name = "worker"
+  cmd = ["python", "-m", "scripts.run_worker"]
