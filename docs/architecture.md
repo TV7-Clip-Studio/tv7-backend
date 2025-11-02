@@ -67,4 +67,5 @@ All endpoints remain within the FastAPI application. Swagger `/docs` should desc
 - **Storage:** Local disk works for development; abstract via settings so object storage (S3, GCS) can be introduced later.
 - **Background Execution:** Use a task queue (e.g., Dramatiq, RQ, Celery) or FastAPI `BackgroundTasks` wrapper that delegates to worker processes. Never block the ingest request on downloading or rendering.
 - **Observability:** Record timestamps and durations per pipeline stage; expose them via logs and metrics to surface bottlenecks (download time, LLM latency, ffmpeg performance).
+- **Admin credentials:** Rotate the HTTP Basic credentials via `make admin-credentials` (writes to `.env`, syncs Fly secrets, and prints the values) before deploying.
 - **Extensibility:** Additional services (thumbnail generation, branded overlays, true publisher integrations) should build atop these core models without splitting the codebase.

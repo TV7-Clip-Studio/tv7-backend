@@ -64,10 +64,10 @@
 - **Implementation overview:** Dependency `require_admin` wraps `fastapi.security.HTTPBasic` and validates credentials sourced from `ADMIN_USERNAME`/`ADMIN_PASSWORD` environment variables. Apply `Depends(require_admin)` to every `/admin/*` route to enforce the challenge-response flow.
 - **Important:** Rotate credentials by updating environment variables and restarting the process. Missing configuration raises a 500 to surface deployment misconfigurations immediately.
 
-### 0.13 — Operator admin access ⬜
+### 0.13 — Operator admin access ✅
 - **Why:** Authentication alone isn’t enough; we need a predictable way to bootstrap trusted operators.
-- **Implementation overview:** Decide on approach (seeded admin user via migration, environment allowlist, or CLI provisioning command). Ensure credentials/secrets live in settings and document the rotation workflow.
-- **Important:** Keep the process auditable. Record the procedure in `README.md` or ops docs so future maintainers can add/remove admins without DB spelunking.
+- **Implementation overview:** `scripts/admin_credentials.py` (surfaced via `make admin-credentials`) generates a secure password, updates `.env`, and, by default, runs `fly secrets set` for the configured app. Under the hood it relies on `app.admin.credentials` helpers to update .env files safely.
+- **Important:** Rotation is a single command locally; ensure operators have the Fly CLI logged in so the auto-sync succeeds. If it fails, fallback instructions appear in the README.
 
 ## Phase 1 — Shorts MVP
 

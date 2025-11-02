@@ -16,6 +16,7 @@ FLY_DOMAIN ?= $(FLY_APP).fly.dev
 .PHONY: deps run test testcov fmt lint type sec precommit \
         revision upgrade downgrade migrate up down logs dev smoke \
         smoke-fly \
+        admin-credentials \
         test-integration
 
 deps:
@@ -84,3 +85,6 @@ smoke:
 smoke-fly:
 	@echo "Checking Fly health endpoint for $(FLY_APP)" ; \
 	curl -fsS https://$(FLY_DOMAIN)/health | jq .
+
+admin-credentials: deps
+	$(PY) scripts/admin_credentials.py --write --fly-sync --fly-app $(FLY_APP)

@@ -25,6 +25,13 @@ uvicorn app.main:app --reload
 - `BETA_API_KEY` enables the beta API guard (required for `/api/v1/ai` locally and in Fly secrets).
 - Optional AgentKit integration uses `AGENTKIT_URL` and `AGENTKIT_API_KEY`.
 
+## Admin dashboard credentials
+
+- Generate or rotate the HTTP Basic credentials with `make admin-credentials`.
+- The command writes `ADMIN_USERNAME`/`ADMIN_PASSWORD` to `.env`, syncs them to Fly via `fly secrets set` (requires `fly` CLI logged in), and prints the values for reference.
+- If the Fly sync fails or you skipped the Make target, set secrets manually: `fly secrets set ADMIN_USERNAME=... ADMIN_PASSWORD=... -a $FLY_APP`.
+- Redeploy after updating secrets so the FastAPI app picks up the new credentials.
+
 ## Fly smoke test
 
 Deploying to Fly? After `fly deploy`, run:

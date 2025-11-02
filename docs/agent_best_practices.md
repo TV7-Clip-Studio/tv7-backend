@@ -30,7 +30,7 @@ This guide keeps autonomous or semi-autonomous contributors aligned while evolvi
 
 ## Operations & Observability
 - **Metrics & logs:** Extend Prometheus counters/histograms and structured logging when building new stages. Include `video_id` / `clip_id` / `job_id` in log contexts.
-- **Admin access:** Use the roadmap’s admin auth scaffolding (`require_admin` + `ADMIN_USERNAME`/`ADMIN_PASSWORD`). Never deploy a dashboard without protection.
+- **Admin access:** Use the roadmap’s admin auth scaffolding (`require_admin` + `ADMIN_USERNAME`/`ADMIN_PASSWORD`). Rotate credentials with `make admin-credentials` (auto-syncs Fly secrets when logged in). Never deploy a dashboard without protection.
 - **Deployment parity:** Verify local Docker/Compose and Fly.io configurations stay in sync. Update Makefile and docs when new processes (workers, cron) are introduced.
 - **Runbooks:** Capture operational steps (rotating admin access, seeding models, troubleshooting workers) in `docs/` as you add features.
 
