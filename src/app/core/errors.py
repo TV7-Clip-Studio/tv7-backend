@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
@@ -16,8 +17,9 @@ def install_exception_handlers(app: FastAPI) -> None:
         )
 
     def _validation_response(exc: ValidationError | RequestValidationError) -> JSONResponse:
+        details = jsonable_encoder(exc.errors())
         return JSONResponse(
-            {"error": {"code": 422, "message": "Validation error", "details": exc.errors()}},
+            {"error": {"code": 422, "message": "Validation error", "details": details}},
             status_code=422,
         )
 

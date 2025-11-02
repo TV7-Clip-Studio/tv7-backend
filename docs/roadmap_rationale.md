@@ -76,10 +76,10 @@
 - **Implementation overview:** Added `Video`/`Clip` SQLAlchemy models with string-backed status enums (`VideoStatus`, `ClipStatus`), transcript and file-path fields, cascade relationships, and timestamp columns. Alembic revision `1c6c4f5cb4d1` creates `videos` and `clips` tables plus indexes on `videos.status`, `clips.status`, and `clips.video_id`. Pydantic `VideoRead`/`ClipRead` schemas mirror the models for upcoming API work.
 - **Important:** The models default `Video.status` to `ingested` and `Clip.status` to `rendering`; downstream services should rely on these constants. Cascade delete removes clips when a video is removed, so be careful when implementing archival flows.
 
-### 1.2 — `POST /videos/ingest`
+### 1.2 — `POST /videos/ingest` ✅
 - **Why:** Entry point for the entire pipeline; must validate inputs and return quickly.
-- **Implementation overview:** Add route to a new `videos` router (tag: `videos`). Persist initial `Video` row (`status=ingested`) and enqueue background task (Phase 1.3). Return job identifier and initial status.
-- **Important:** Validate URLs and handle duplicate submissions (optionally reprocess existing video). Return idempotent responses to keep UI simple.
+- **Implementation overview:** Added `/api/v1/videos/ingest` (protected by the beta key) that accepts a YouTube URL, validates the domain, upserts a `Video` row with `status=ingested`, and hands off to `services.ingest.enqueue_video` (placeholder until Phase 1.3). Responses include the Pydantic `VideoRead` payload plus `created/queued` flags.
+- **Important:** Duplicate submissions re-queue existing videos without creating new rows. Validation rejects non-YouTube URLs with 422. The enqueue function currently logs; replace with real queue dispatch during Phase 1.3.
 
 ### 1.3 — Background execution infrastructure
 - **Why:** Downloading and rendering videos is CPU-bound; requests must not block.

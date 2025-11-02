@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends
 
 from app.deps.security import require_beta_key
 
-from . import ai, users
+from . import ai, users, videos
 
 api_router = APIRouter(dependencies=[Depends(require_beta_key)])
 
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(ai.router, prefix="/ai", tags=["ai"])
+api_router.include_router(videos.router, prefix="/videos", tags=["videos"])

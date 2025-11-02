@@ -19,7 +19,7 @@
 
 ## Phase 1 — Shorts MVP (🚧 Active)
 - 1.1 ✅ Define `Video` and `Clip` ORM models with enums/status columns, transcript/file path fields, and generate Alembic migrations to create the backing tables.
-- 1.2 Implement `POST /videos/ingest` inside `api/v1` that validates the YouTube URL, creates a `Video` record (`status=ingested`), and enqueues the processing workflow.
+- 1.2 ✅ Implement `POST /videos/ingest` inside `api/v1` that validates the YouTube URL, creates a `Video` record (`status=ingested`), and enqueues the processing workflow.
 - 1.3 Build background execution infrastructure (Celery/RQ/Dramatiq or equivalent) plus a task orchestrator that runs the ingestion → highlight → clipping stages off-thread.
 - 1.4 Write `services/youtube_downloader.py` to download the highest-quality stream, fetch captions/transcript (youtube-transcript-api + fallback), persist artifacts, and update the `Video`.
 - 1.5 Implement `services/highlight_detector.py` that calls the LLM, parses 3–5 segments with `{start_sec, end_sec, hook}`, handles parsing errors, and creates `Clip` rows (`status=rendering`).
