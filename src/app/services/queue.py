@@ -14,7 +14,7 @@ from app.core.config import settings
 def get_broker() -> Broker:
     broker_type = settings.DRAMATIQ_BROKER.lower()
     if broker_type == "redis":
-        broker = RedisBroker(url=settings.REDIS_URL)
+        broker: Broker = RedisBroker(url=settings.REDIS_URL)
     elif broker_type == "stub":
         broker = StubBroker()
     else:
@@ -29,6 +29,8 @@ def ensure_broker() -> Broker:
     """Initialize the Dramatiq broker if it hasn't been set yet."""
 
     try:
-        return dramatiq.get_broker() or get_broker()
+        existing = dramatiq.get_broker()
     except RuntimeError:  # no broker configured
-        return get_broker()
+        existing = None
+
+    return existing if existing is not None else get_broker()
