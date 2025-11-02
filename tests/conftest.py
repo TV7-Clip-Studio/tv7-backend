@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import StaticPool
 
+from app.db import base as db_base
+from app.db import models  # noqa: F401  # ensure metadata registration
 from app.db.base import Base
 from app.main import app
 
@@ -39,8 +41,6 @@ async def db_engine() -> AsyncIterator[AsyncEngine]:
         poolclass=StaticPool,
     )
     async with engine.begin() as conn:
-        from app.db import models  # noqa: F401  # ensure metadata registration
-
         await conn.run_sync(Base.metadata.create_all)
     try:
         yield engine
@@ -75,8 +75,6 @@ async def configure_app_database(
     if request.node.get_closest_marker("no_db_override"):
         yield
         return
-
-    from app.db import base as db_base
 
     db_base._engine_factory.cache_clear()
     db_base._session_factory.cache_clear()

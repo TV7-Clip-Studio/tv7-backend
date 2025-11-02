@@ -17,7 +17,7 @@ def _get_beta_key() -> str | None:
 
 
 async def require_beta_key(
-    x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None
+    x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
 ) -> str:
     expected = _get_beta_key()
     if not expected or x_api_key != expected:
