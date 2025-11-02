@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
+from app.db.models import ClipStatus, VideoStatus
 
 
 class Health(BaseModel):
@@ -22,5 +24,32 @@ class UserRead(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ClipRead(BaseModel):
+    id: int
+    video_id: int
+    start_sec: int
+    end_sec: int
+    local_path: str | None
+    caption_text: str | None
+    status: ClipStatus
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class VideoRead(BaseModel):
+    id: int
+    source_url: str
+    local_path: str | None
+    transcript_text: str | None
+    status: VideoStatus
+    created_at: datetime
+    updated_at: datetime
+    clips: list[ClipRead] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)

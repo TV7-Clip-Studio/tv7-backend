@@ -71,10 +71,10 @@
 
 ## Phase 1 — Shorts MVP
 
-### 1.1 — `Video` & `Clip` ORM models
+### 1.1 — `Video` & `Clip` ORM models ✅
 - **Why:** These tables capture the lifecycle and metadata for ingestion and clip generation.
-- **Implementation overview:** Add SQLAlchemy models (status fields as `Enum` or constrained string), run Alembic migration, and ensure relationships are eager-load friendly. Consider `Enum` definitions in a shared module.
-- **Important:** Include indexes on `Video.status`, `Clip.video_id`, and timestamps for monitoring dashboards.
+- **Implementation overview:** Added `Video`/`Clip` SQLAlchemy models with string-backed status enums (`VideoStatus`, `ClipStatus`), transcript and file-path fields, cascade relationships, and timestamp columns. Alembic revision `1c6c4f5cb4d1` creates `videos` and `clips` tables plus indexes on `videos.status`, `clips.status`, and `clips.video_id`. Pydantic `VideoRead`/`ClipRead` schemas mirror the models for upcoming API work.
+- **Important:** The models default `Video.status` to `ingested` and `Clip.status` to `rendering`; downstream services should rely on these constants. Cascade delete removes clips when a video is removed, so be careful when implementing archival flows.
 
 ### 1.2 — `POST /videos/ingest`
 - **Why:** Entry point for the entire pipeline; must validate inputs and return quickly.
