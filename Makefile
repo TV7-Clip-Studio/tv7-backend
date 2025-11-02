@@ -16,7 +16,7 @@ FLY_DOMAIN ?= $(FLY_APP).fly.dev
 .PHONY: deps run test testcov fmt lint type sec precommit \
         revision upgrade downgrade migrate up down logs dev smoke \
         smoke-fly \
-        admin-credentials \
+        admin-credentials worker \
         test-integration
 
 deps:
@@ -88,3 +88,6 @@ smoke-fly:
 
 admin-credentials: deps
 	$(PY) scripts/admin_credentials.py --write --fly-sync --fly-app $(FLY_APP)
+
+worker: deps
+	$(PY) scripts/run_worker.py

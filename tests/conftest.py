@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import AsyncIterator, Generator
 from typing import Any
 
@@ -19,6 +20,8 @@ from app.db import base as db_base
 from app.db import models  # noqa: F401  # ensure metadata registration
 from app.db.base import Base
 from app.main import app
+
+os.environ.setdefault("DRAMATIQ_BROKER", "stub")
 
 
 @pytest.fixture(scope="session")
