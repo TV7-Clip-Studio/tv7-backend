@@ -15,7 +15,7 @@
 - 0.10 ✅ Maintain unit and integration test suites under `tests/` with coverage thresholds (`--cov-fail-under=85`).
 - 0.11 ✅ Run GitHub Actions CI pipeline (`.github/workflows/ci.yml`) executing fmt, lint, type checks, security scan, and tests on every push/PR.
 - 0.12 ✅ Introduce admin-route authentication scaffold (basic auth or shared secret) ready to wrap upcoming `/admin/*` endpoints.
-- 0.13 ⬜ Establish operator admin access: seed an initial admin user or configure an allowlist/env-backed credential for `/admin/*`, and document rotation steps.
+- 0.13 ✅ Establish operator admin access: seed an initial admin user or configure an allowlist/env-backed credential for `/admin/*`, and document rotation steps.
 
 ## Phase 1 — Shorts MVP (🚧 Active)
 - 1.1 Define `Video` and `Clip` ORM models with enums/status columns, transcript/file path fields, and generate Alembic migrations to create the backing tables.
