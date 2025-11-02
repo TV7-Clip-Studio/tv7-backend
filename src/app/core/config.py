@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
     TRUSTED_HOSTS: list[str] = ["*"]
     DATABASE_URL: AnyUrl = "postgresql+asyncpg://postgres:postgres@localhost:5432/appdb"
+    ADMIN_USERNAME: str | None = None
+    ADMIN_PASSWORD: str | None = None
 
 
 settings = Settings()
