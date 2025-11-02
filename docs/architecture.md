@@ -57,6 +57,7 @@ The pipeline must execute outside the request/response loop (Celery/RQ/Dramatiq/
 - `GET /status/{video_id}` — poll overall video status plus per-clip progress snapshots.
 - `GET /videos/{video_id}/clips` — list generated clips with timing, caption text, preview URLs/paths, and status.
 - `POST /clips/{clip_id}/publish` — create `PublishJob` records and trigger (stubbed) publishing automation.
+- `POST /videos/ingest` — accept a YouTube URL, persist the `Video` row (`status=ingested`), and enqueue the background pipeline.
 - `GET /admin/videos` — HTML dashboard of videos, statuses, and navigation to detail view.
 - `GET /admin/videos/{video_id}` — HTML per-video view showing clip previews, metadata, and publish buttons hooked to the publish endpoint.
 - All admin-prefixed routes require HTTP Basic auth; credentials are supplied via `ADMIN_USERNAME`/`ADMIN_PASSWORD` environment variables.
