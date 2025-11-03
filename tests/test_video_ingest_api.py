@@ -8,8 +8,8 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1 import videos as videos_module
 from app.db.models import Video
+from app.deps import db as db_deps
 from app.main import app
 
 pytestmark = pytest.mark.asyncio
@@ -20,9 +20,9 @@ def override_db_dependency(db_session: AsyncSession) -> Generator[None, None, No
     async def _override() -> AsyncSession:
         yield db_session
 
-    app.dependency_overrides[videos_module.get_db_session] = _override
+    app.dependency_overrides[db_deps.get_session] = _override
     yield
-    app.dependency_overrides.pop(videos_module.get_db_session, None)
+    app.dependency_overrides.pop(db_deps.get_session, None)
 
 
 async def test_ingest_creates_video(
@@ -31,7 +31,7 @@ async def test_ingest_creates_video(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("BETA_API_KEY", "dev-beta-key")
-    with patch("app.api.v1.videos.enqueue_video", new=AsyncMock()) as mock_enqueue:
+    with patch("app.services.videos.enqueue_video", new=AsyncMock()) as mock_enqueue:
         response = await async_client.post(
             "/api/v1/videos/ingest",
             json={"youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"},
@@ -63,7 +63,7 @@ async def test_ingest_requeues_existing(
     db_session.add(video)
     await db_session.flush()
 
-    with patch("app.api.v1.videos.enqueue_video", new=AsyncMock()) as mock_enqueue:
+    with patch("app.services.videos.enqueue_video", new=AsyncMock()) as mock_enqueue:
         response = await async_client.post(
             "/api/v1/videos/ingest",
             json={"youtube_url": "https://youtu.be/abc123"},

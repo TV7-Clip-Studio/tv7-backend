@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -63,8 +64,14 @@ async def db_session(
 ) -> AsyncIterator[AsyncSession]:
     """Yield a database session, rolling back between tests."""
     async with session_factory() as session:
-        yield session
-        await session.rollback()
+        try:
+            yield session
+        finally:
+            try:
+                if session.is_active:
+                    await session.rollback()
+            except SQLAlchemyError:
+                pass
 
 
 @pytest_asyncio.fixture(autouse=True)

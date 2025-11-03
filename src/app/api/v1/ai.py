@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.deps.rate_limit import check_rate
 from app.deps.security import require_beta_key
+from app.services.ai import execute_agent
 
 router = APIRouter()
 
@@ -33,4 +34,10 @@ async def execute(
     x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
 ) -> AIResponse:
     check_rate(x_api_key or "anon")
-    return AIResponse(output=f"ECHO: {payload.input}", meta={"agent_id": payload.agent_id})
+    result = execute_agent(
+        agent_id=payload.agent_id,
+        user_input=payload.input,
+        session_id=payload.session_id,
+        context=payload.context,
+    )
+    return AIResponse(output=result.output, meta=result.meta)

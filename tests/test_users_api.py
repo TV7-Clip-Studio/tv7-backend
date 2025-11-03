@@ -4,14 +4,14 @@ from collections.abc import Generator
 from http import HTTPStatus
 
 import pytest
-from fastapi import HTTPException
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1 import users as users_api
 from app.core.security import verify_password
 from app.db.models import User
+from app.repositories.users import UserRepository
 from app.schemas import UserCreate
+from app.services.users import UserAlreadyExistsError, create_user
 
 pytestmark = pytest.mark.asyncio
 
@@ -100,10 +100,10 @@ async def test_create_user_direct_call(db_session: AsyncSession) -> None:
         full_name="Direct User",
         password="direct-secret",
     )
-    user = await users_api.create_user(payload, db_session)
+    repo = UserRepository(db_session)
+    user = await create_user(payload, repo)
     assert user.email == payload.email
     assert verify_password(payload.password, user.password_hash)
 
-    with pytest.raises(HTTPException) as exc_info:
-        await users_api.create_user(payload, db_session)
-    assert exc_info.value.status_code == HTTPStatus.CONFLICT
+    with pytest.raises(UserAlreadyExistsError):
+        await create_user(payload, repo)

@@ -96,3 +96,5 @@ We host production/staging Postgres on Neon. The full setup guide—covering poo
   By default the suite tries to start a disposable Postgres via Docker. If Docker isn't available, set
   `TEST_DATABASE_URL` to point at a reachable Postgres instance (e.g. `postgresql+asyncpg://user:pass@host:port/db`).
   You can also override the container image with `TEST_POSTGRES_IMAGE`.
+
+See `docs/testing.md` for an overview of the unit, system, and integration layers plus guidance on where to place new scenarios.

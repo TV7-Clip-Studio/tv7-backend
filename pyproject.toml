@@ -77,6 +77,7 @@ asyncio_mode = "auto"
 markers = [
   "no_db_override: run test without overriding database dependencies",
   "integration: tests that hit real services (Postgres, etc.)",
+  "system: end-to-end FastAPI API flows with real wiring",
 ]
 filterwarnings = [
   "ignore:'crypt' is deprecated and slated for removal in Python 3.13:DeprecationWarning:passlib.utils",
