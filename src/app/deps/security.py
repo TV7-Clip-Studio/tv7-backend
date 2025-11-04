@@ -4,10 +4,19 @@ import os
 import secrets
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, status
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi import Depends, Header, HTTPException, Security, status
+from fastapi.security import (
+    HTTPAuthorizationCredentials,
+    HTTPBasic,
+    HTTPBasicCredentials,
+    HTTPBearer,
+)
 
 from app.core.config import settings
+from app.db.models import User
+from app.deps.db import get_user_repository
+from app.repositories.users import UserRepository
+from app.services.auth import resolve_user_from_token
 
 
 def _get_beta_key() -> str | None:
@@ -23,6 +32,21 @@ async def require_beta_key(
     if not expected or x_api_key != expected:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
     return x_api_key
+
+
+_bearer_scheme = HTTPBearer(auto_error=False)
+
+
+async def require_jwt_user(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Security(_bearer_scheme)],
+    repo: Annotated[UserRepository, Depends(get_user_repository)],
+) -> User:
+    if credentials is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
+    token = credentials.credentials
+    user = await resolve_user_from_token(token, repo)
+    return user
 
 
 _admin_security = HTTPBasic()

@@ -71,3 +71,21 @@ All endpoints remain within the FastAPI application. Swagger `/docs` should desc
 - **Observability:** Record timestamps and durations per pipeline stage; expose them via logs and metrics to surface bottlenecks (download time, LLM latency, ffmpeg performance).
 - **Admin credentials:** Rotate the HTTP Basic credentials via `make admin-credentials` (writes to `.env`, syncs Fly secrets, and prints the values) before deploying.
 - **Extensibility:** Additional services (thumbnail generation, branded overlays, true publisher integrations) should build atop these core models without splitting the codebase.
+
+## API Layering & Dependencies
+
+All FastAPI endpoints follow the same structure to keep concerns isolated and testable:
+
+1. **Router (e.g., `src/app/api/v1/videos.py`)** – Validates request payloads, injects dependencies, converts domain objects into Pydantic response schemas, and translates service exceptions into HTTP errors. Routers never talk to the database directly.
+2. **Dependencies (`app/deps/*.py`)** – Provide shared helpers for wiring infrastructure into routes. For example `app.deps.db.get_session` yields an `AsyncSession`, while `get_video_repository` instantiates repositories bound to that session.
+3. **Repositories (`app/repositories/*.py`)** – Thin wrappers around SQLAlchemy queries and persistence helpers. They expose methods such as `get_by_source_url` and `add_and_refresh`, keeping ORM knowledge in one place.
+4. **Services (`app/services/*.py`)** – Contain domain logic and orchestration (validation, logging, queue dispatch). Services return ORM instances or DTOs and are unaware of FastAPI specifics.
+5. **Security (`app/deps/security.py`)** – Supplies `require_jwt_user`, a bearer-token dependency that validates JWTs (signed via `app/core/jwt.py`) and injects the current user. Swagger is configured to persist the bearer token for interactive testing.
+
+When implementing a new endpoint:
+
+- Add or reuse repository/service functions instead of embedding logic inside the router.
+- Extend `app/deps` with new dependency constructors if the route needs extra collaborators.
+- Convert ORM results to response schemas at the router boundary (`UserRead.model_validate(user)`), preserving strong typing for FastAPI.
+
+See `docs/testing.md` for how these layers map onto the test strategy (unit, system, integration).

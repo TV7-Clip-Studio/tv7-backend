@@ -4,10 +4,12 @@ import asyncio
 import os
 from collections.abc import AsyncIterator, Generator
 from typing import Any
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -16,9 +18,11 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import StaticPool
 
+from app.core.security import hash_password
 from app.db import base as db_base
 from app.db import models  # noqa: F401  # ensure metadata registration
 from app.db.base import Base
+from app.db.models import User
 from app.main import app
 
 os.environ.setdefault("DRAMATIQ_BROKER", "stub")
@@ -63,8 +67,14 @@ async def db_session(
 ) -> AsyncIterator[AsyncSession]:
     """Yield a database session, rolling back between tests."""
     async with session_factory() as session:
-        yield session
-        await session.rollback()
+        try:
+            yield session
+        finally:
+            try:
+                if session.is_active:
+                    await session.rollback()
+            except SQLAlchemyError:
+                pass
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -103,3 +113,28 @@ async def async_client() -> AsyncIterator[AsyncClient]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client
+
+
+@pytest_asyncio.fixture
+async def login_credentials(db_session: AsyncSession) -> AsyncIterator[tuple[str, str]]:
+    email = f"tester-{uuid4().hex}@example.com"
+    password = "test-password"
+    user = User(email=email, full_name="System Tester", password_hash=hash_password(password))
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    yield email, password
+
+
+@pytest_asyncio.fixture
+async def auth_headers(
+    async_client: AsyncClient, login_credentials: tuple[str, str]
+) -> dict[str, str]:
+    email, password = login_credentials
+    response = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": password},
+    )
+    response.raise_for_status()
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}

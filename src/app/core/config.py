@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     DRAMATIQ_BROKER: str = "stub"
     WORKER_CONCURRENCY: int = 4
+    JWT_SECRET: str = "change-me"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRES_MINUTES: int = 30
+    JWT_REFRESH_TOKEN_EXPIRES_MINUTES: int = 60 * 24 * 7  # one week
 
 
 settings = Settings()

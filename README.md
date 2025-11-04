@@ -28,6 +28,37 @@ uvicorn app.main:app --reload
   - `REDIS_URL` (default `redis://localhost:6379/0` locally; `redis://redis:6379/0` in Docker).
   - `DRAMATIQ_BROKER` (`stub` for tests/standalone dev, `redis` when the queue is available).
   - `WORKER_CONCURRENCY` controls the worker pool size.
+- JWT auth settings:
+  - `JWT_SECRET` and `JWT_ALGORITHM` sign API tokens (default `HS256`).
+  - `JWT_ACCESS_TOKEN_EXPIRES_MINUTES` / `JWT_REFRESH_TOKEN_EXPIRES_MINUTES` control expiry windows.
+
+### Authentication
+
+Use `/api/v1/auth/login` to obtain an access token (`Authorization: Bearer <token>`). Protected routes (users, videos, ai) require this header. The Swagger UI persists the token via the standard “Authorize” dialog—paste the bearer token once and all subsequent calls are authenticated. Refresh tokens are issued alongside access tokens; exchange them via `/api/v1/auth/refresh` when needed.
+
+- Seed or update an operator account via `scripts/create_admin_user.sh`:
+
+  - **All-local Postgres:** ensure `DATABASE_URL` points at `localhost` and run the script directly.
+
+  ```bash
+  DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/appdb \
+    scripts/create_admin_user.sh --email you@example.com --full-name "Operator"
+  ```
+
+- **Docker Compose Postgres:** execute the script inside the `api` container so the `postgres` hostname resolves.
+
+  ```bash
+  docker compose exec api \
+    scripts/create_admin_user.sh --email you@example.com --full-name "Operator"
+  ```
+
+- **Fly.io:** let the script invoke the remote container by passing `--fly` (optionally `--fly-app <name>`).
+
+  ```bash
+  scripts/create_admin_user.sh --fly --email you@example.com --full-name "Operator"
+  ```
+
+  The script prompts for a password, hashes it, and upserts the user record.
 
 ## Admin dashboard credentials
 
@@ -96,3 +127,5 @@ We host production/staging Postgres on Neon. The full setup guide—covering poo
   By default the suite tries to start a disposable Postgres via Docker. If Docker isn't available, set
   `TEST_DATABASE_URL` to point at a reachable Postgres instance (e.g. `postgresql+asyncpg://user:pass@host:port/db`).
   You can also override the container image with `TEST_POSTGRES_IMAGE`.
+
+See `docs/testing.md` for an overview of the unit, system, and integration layers plus guidance on where to place new scenarios.

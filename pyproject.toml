@@ -19,6 +19,7 @@ dependencies = [
   "passlib[bcrypt]>=1.7",
   "dramatiq[redis]>=1.16",
   "redis>=5.0",
+  "python-jose[cryptography]>=3.3.0",
 ]
 
 [project.optional-dependencies]
@@ -77,6 +78,7 @@ asyncio_mode = "auto"
 markers = [
   "no_db_override: run test without overriding database dependencies",
   "integration: tests that hit real services (Postgres, etc.)",
+  "system: end-to-end FastAPI API flows with real wiring",
 ]
 filterwarnings = [
   "ignore:'crypt' is deprecated and slated for removal in Python 3.13:DeprecationWarning:passlib.utils",
