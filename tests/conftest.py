@@ -109,12 +109,12 @@ async def configure_app_database(
     monkeypatch.setattr(db_base, "async_sessionmaker", _session_factory_stub)
 
     monkeypatch.setenv("DRAMATIQ_BROKER", "stub")
-    import dramatiq
-    from dramatiq.brokers.stub import StubBroker
+    import dramatiq  # noqa: PLC0415
+    from dramatiq.brokers.stub import StubBroker  # noqa: PLC0415
 
-    from app.core import config as app_config
-    from app.services import queue as queue_module
-    from app.services import tasks as tasks_module
+    from app.core import config as app_config  # noqa: PLC0415
+    from app.services import queue as queue_module  # noqa: PLC0415
+    from app.services import tasks as tasks_module  # noqa: PLC0415
 
     app_config.settings.DRAMATIQ_BROKER = "stub"
 
