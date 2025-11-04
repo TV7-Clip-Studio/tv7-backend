@@ -21,13 +21,17 @@
 - 1.1 ✅ Define `Video` and `Clip` ORM models with enums/status columns, transcript/file path fields, and generate Alembic migrations to create the backing tables.
 - 1.2 ✅ Implement `POST /videos/ingest` inside `api/v1` that validates the YouTube URL, creates a `Video` record (`status=ingested`), and enqueues the processing workflow.
 - 1.3 ✅ Build background execution infrastructure (Celery/RQ/Dramatiq or equivalent) plus a task orchestrator that runs the ingestion → highlight → clipping stages off-thread.
-- 1.4 Write `services/youtube_downloader.py` to download the highest-quality stream, fetch captions/transcript (youtube-transcript-api + fallback), persist artifacts, and update the `Video`.
-- 1.5 Implement `services/highlight_detector.py` that calls the LLM, parses 3–5 segments with `{start_sec, end_sec, hook}`, handles parsing errors, and creates `Clip` rows (`status=rendering`).
-- 1.6 Build `services/clipper.py` that slices video segments with ffmpeg, converts to 9:16 framing, manages temp files, and hands off to the subtitle renderer.
-- 1.7 Create `services/subtitle_styler.py` to extract transcript snippets, render social-style captions (font, outline, positioning), burn them into the clip, and update `Clip.local_path` + `status=ready`.
-- 1.8 Expose `GET /status/{video_id}` (overall state + per-clip summaries) and `GET /videos/{video_id}/clips` (detailed clip metadata, previews, captions) for polling and UI consumption.
-- 1.9 Deliver internal admin routes `/admin/videos` and `/admin/videos/{video_id}` with Jinja templates: list view, per-video clip gallery, preview players, and buttons wired to the publish endpoint stub.
-- 1.10 Add admin-side ingestion workflow: `/admin/videos/new` (or inline modal) that lets operators paste a YouTube URL, submits to `POST /videos/ingest`, and shows immediate feedback/status polling.
+- 1.4.0 ✅ Refactor v1 API routers into service/repository layers, introduce shared DB dependencies, add end-to-end system tests, and lay the groundwork for JWT-based authentication.
+- 1.4.1 ✅ Add JWT configuration, token utilities, and auth service for issuing access/refresh tokens.
+- 1.4.2 ✅ Replace beta-key dependencies with JWT bearer auth across protected routers, update Swagger security schemes, and add login endpoints.
+- 1.4.3 ✅ Update tests/docs to reflect the JWT flow (system/integration suites request tokens) and finalize beta-key deprecation plan.
+- 1.5 Write `services/youtube_downloader.py` to download the highest-quality stream, fetch captions/transcript (youtube-transcript-api + fallback), persist artifacts, and update the `Video`.
+- 1.6 Implement `services/highlight_detector.py` that calls the LLM, parses 3–5 segments with `{start_sec, end_sec, hook}`, handles parsing errors, and creates `Clip` rows (`status=rendering`).
+- 1.7 Build `services/clipper.py` that slices video segments with ffmpeg, converts to 9:16 framing, manages temp files, and hands off to the subtitle renderer.
+- 1.8 Create `services/subtitle_styler.py` to extract transcript snippets, render social-style captions (font, outline, positioning), burn them into the clip, and update `Clip.local_path` + `status=ready`.
+- 1.9 Expose `GET /status/{video_id}` (overall state + per-clip summaries) and `GET /videos/{video_id}/clips` (detailed clip metadata, previews, captions) for polling and UI consumption.
+- 1.10 Deliver internal admin routes `/admin/videos` and `/admin/videos/{video_id}` with Jinja templates: list view, per-video clip gallery, preview players, and buttons wired to the publish endpoint stub.
+- 1.11 Add admin-side ingestion workflow: `/admin/videos/new` (or inline modal) that lets operators paste a YouTube URL, submits to `POST /videos/ingest`, and shows immediate feedback/status polling.
 
 ## Phase 2 — Operational Polish (Queued)
 - 2.1 Add `PublishJob` ORM model/migration covering platform enum, status, response payload, timestamps.

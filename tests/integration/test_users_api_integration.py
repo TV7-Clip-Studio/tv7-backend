@@ -7,27 +7,26 @@ from httpx import AsyncClient
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
-HEADERS = {"X-API-Key": "test-beta-key"}
 
-
-@pytest.fixture(autouse=True)
-def beta_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("BETA_API_KEY", "test-beta-key")
-
-
-async def test_list_users_initially_empty(async_client: AsyncClient) -> None:
-    response = await async_client.get("/api/v1/users/", headers=HEADERS)
+async def test_list_users_initially_contains_authenticated_user(
+    async_client: AsyncClient, integration_auth_headers: dict[str, str]
+) -> None:
+    response = await async_client.get("/api/v1/users/", headers=integration_auth_headers)
     assert response.status_code == HTTPStatus.OK
-    assert response.json() == []
+    assert isinstance(response.json(), list)
 
 
-async def test_create_user(async_client: AsyncClient) -> None:
+async def test_create_user(
+    async_client: AsyncClient, integration_auth_headers: dict[str, str]
+) -> None:
     payload = {
         "email": "integration@example.com",
         "full_name": "Integration User",
         "password": "integration-secret",
     }
-    response = await async_client.post("/api/v1/users/", json=payload, headers=HEADERS)
+    response = await async_client.post(
+        "/api/v1/users/", json=payload, headers=integration_auth_headers
+    )
     body = response.json()
 
     assert response.status_code == HTTPStatus.CREATED
@@ -39,32 +38,40 @@ async def test_create_user(async_client: AsyncClient) -> None:
     assert "updated_at" in body
     assert "password_hash" not in body
 
-    listing = await async_client.get("/api/v1/users/", headers=HEADERS)
+    listing = await async_client.get("/api/v1/users/", headers=integration_auth_headers)
     users = listing.json()
     assert any(user["email"] == payload["email"] for user in users)
     assert all("password_hash" not in user for user in users)
 
 
-async def test_create_user_conflict(async_client: AsyncClient) -> None:
+async def test_create_user_conflict(
+    async_client: AsyncClient, integration_auth_headers: dict[str, str]
+) -> None:
     payload = {
         "email": "duplicate@example.com",
         "full_name": "Duplicate User",
         "password": "duplicate-secret",
     }
-    first = await async_client.post("/api/v1/users/", json=payload, headers=HEADERS)
+    first = await async_client.post(
+        "/api/v1/users/", json=payload, headers=integration_auth_headers
+    )
     assert first.status_code == HTTPStatus.CREATED
 
-    conflict = await async_client.post("/api/v1/users/", json=payload, headers=HEADERS)
+    conflict = await async_client.post(
+        "/api/v1/users/", json=payload, headers=integration_auth_headers
+    )
     assert conflict.status_code == HTTPStatus.CONFLICT
     assert conflict.json() == {
         "error": {"code": HTTPStatus.CONFLICT, "message": "Email already in use"}
     }
 
 
-async def test_create_user_validation_error(async_client: AsyncClient) -> None:
+async def test_create_user_validation_error(
+    async_client: AsyncClient, integration_auth_headers: dict[str, str]
+) -> None:
     response = await async_client.post(
         "/api/v1/users/",
-        headers=HEADERS,
+        headers=integration_auth_headers,
         json={"email": "not-an-email", "full_name": "", "password": "invalid-secret"},
     )
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY

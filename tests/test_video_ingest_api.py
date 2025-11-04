@@ -28,14 +28,13 @@ def override_db_dependency(db_session: AsyncSession) -> Generator[None, None, No
 async def test_ingest_creates_video(
     async_client: AsyncClient,
     db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
+    auth_headers: dict[str, str],
 ) -> None:
-    monkeypatch.setenv("BETA_API_KEY", "dev-beta-key")
     with patch("app.services.videos.enqueue_video", new=AsyncMock()) as mock_enqueue:
         response = await async_client.post(
             "/api/v1/videos/ingest",
             json={"youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"},
-            headers={"X-API-Key": "dev-beta-key"},
+            headers=auth_headers,
         )
     assert response.status_code == 202
     data = response.json()
@@ -56,9 +55,8 @@ async def test_ingest_creates_video(
 async def test_ingest_requeues_existing(
     async_client: AsyncClient,
     db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
+    auth_headers: dict[str, str],
 ) -> None:
-    monkeypatch.setenv("BETA_API_KEY", "dev-beta-key")
     video = Video(source_url="https://youtu.be/abc123", status="processing")
     db_session.add(video)
     await db_session.flush()
@@ -67,7 +65,7 @@ async def test_ingest_requeues_existing(
         response = await async_client.post(
             "/api/v1/videos/ingest",
             json={"youtube_url": "https://youtu.be/abc123"},
-            headers={"X-API-Key": "dev-beta-key"},
+            headers=auth_headers,
         )
 
     assert response.status_code == 202
@@ -79,12 +77,12 @@ async def test_ingest_requeues_existing(
 
 
 async def test_ingest_rejects_non_youtube(
-    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+    async_client: AsyncClient,
+    auth_headers: dict[str, str],
 ) -> None:
-    monkeypatch.setenv("BETA_API_KEY", "dev-beta-key")
     response = await async_client.post(
         "/api/v1/videos/ingest",
         json={"youtube_url": "https://example.com/video"},
-        headers={"X-API-Key": "dev-beta-key"},
+        headers=auth_headers,
     )
     assert response.status_code == 422

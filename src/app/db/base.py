@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from functools import lru_cache
+from urllib.parse import urlparse
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -21,10 +22,19 @@ class Base(DeclarativeBase):
 
 @lru_cache
 def _engine_factory() -> AsyncEngine:
+    database_url = str(settings.DATABASE_URL)
+    connect_args: dict[str, object] = {}
+    if database_url.startswith("postgresql+asyncpg"):
+        host = urlparse(database_url).hostname or ""
+        if host not in {"localhost", "127.0.0.1"}:
+            # Neon requires TLS; asyncpg expects the ssl flag instead of sslmode.
+            connect_args["ssl"] = "require"
+
     return create_async_engine(
-        str(settings.DATABASE_URL),
+        database_url,
         echo=False,
         pool_pre_ping=True,
+        connect_args=connect_args,
     )
 
 

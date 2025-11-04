@@ -80,6 +80,7 @@ All FastAPI endpoints follow the same structure to keep concerns isolated and te
 2. **Dependencies (`app/deps/*.py`)** – Provide shared helpers for wiring infrastructure into routes. For example `app.deps.db.get_session` yields an `AsyncSession`, while `get_video_repository` instantiates repositories bound to that session.
 3. **Repositories (`app/repositories/*.py`)** – Thin wrappers around SQLAlchemy queries and persistence helpers. They expose methods such as `get_by_source_url` and `add_and_refresh`, keeping ORM knowledge in one place.
 4. **Services (`app/services/*.py`)** – Contain domain logic and orchestration (validation, logging, queue dispatch). Services return ORM instances or DTOs and are unaware of FastAPI specifics.
+5. **Security (`app/deps/security.py`)** – Supplies `require_jwt_user`, a bearer-token dependency that validates JWTs (signed via `app/core/jwt.py`) and injects the current user. Swagger is configured to persist the bearer token for interactive testing.
 
 When implementing a new endpoint:
 

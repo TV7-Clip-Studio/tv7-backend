@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import verify_password
@@ -16,9 +16,6 @@ class TestUsersApiSystem:
         system_client: AsyncClient,
         db_session: AsyncSession,
     ) -> None:
-        await db_session.execute(delete(User))
-        await db_session.commit()
-
         payload = {
             "email": "system@example.com",
             "full_name": "System User",
@@ -27,7 +24,6 @@ class TestUsersApiSystem:
         create_response = await system_client.post(
             "/api/v1/users/",
             json=payload,
-            headers={"X-API-Key": "test-beta-key"},
         )
         assert create_response.status_code == 201
         created = create_response.json()
@@ -37,7 +33,6 @@ class TestUsersApiSystem:
 
         list_response = await system_client.get(
             "/api/v1/users/",
-            headers={"X-API-Key": "test-beta-key"},
         )
         assert list_response.status_code == 200
         users = list_response.json()
@@ -51,11 +46,7 @@ class TestUsersApiSystem:
     async def test_create_user_conflict_returns_409(
         self,
         system_client: AsyncClient,
-        db_session: AsyncSession,
     ) -> None:
-        await db_session.execute(delete(User))
-        await db_session.commit()
-
         payload = {
             "email": "duplicate@example.com",
             "full_name": "Dup User",
@@ -64,14 +55,12 @@ class TestUsersApiSystem:
         first = await system_client.post(
             "/api/v1/users/",
             json=payload,
-            headers={"X-API-Key": "test-beta-key"},
         )
         assert first.status_code == 201
 
         conflict = await system_client.post(
             "/api/v1/users/",
             json=payload,
-            headers={"X-API-Key": "test-beta-key"},
         )
         assert conflict.status_code == 409
         body = conflict.json()

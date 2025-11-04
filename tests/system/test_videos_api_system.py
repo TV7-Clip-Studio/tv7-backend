@@ -28,7 +28,6 @@ class TestVideoIngestSystem:
         response = await system_client.post(
             "/api/v1/videos/ingest",
             json={"youtube_url": "https://www.youtube.com/watch?v=abc123"},
-            headers={"X-API-Key": "test-beta-key"},
         )
         assert response.status_code == 202
         payload = response.json()
@@ -61,7 +60,6 @@ class TestVideoIngestSystem:
         response = await system_client.post(
             "/api/v1/videos/ingest",
             json={"youtube_url": "https://youtu.be/abc123"},
-            headers={"X-API-Key": "test-beta-key"},
         )
         assert response.status_code == 202
         payload = response.json()
@@ -81,7 +79,6 @@ class TestVideoIngestSystem:
         response = await system_client.post(
             "/api/v1/videos/ingest",
             json={"youtube_url": "https://example.com/video"},
-            headers={"X-API-Key": "test-beta-key"},
         )
         assert response.status_code == 422
         error = response.json()["error"]

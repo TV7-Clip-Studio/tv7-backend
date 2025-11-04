@@ -17,9 +17,14 @@ from asgi_lifespan import LifespanManager
 from docker.errors import DockerException
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import delete
 from sqlalchemy.engine import URL
 from sqlalchemy.engine.url import make_url
 from testcontainers.postgres import PostgresContainer
+
+from app.core.security import hash_password
+from app.db.base import get_sessionmaker
+from app.db.models import User
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ALEMBIC_INI = PROJECT_ROOT / "alembic.ini"
@@ -148,3 +153,37 @@ async def async_client(app_with_db: FastAPI) -> AsyncIterator[AsyncClient]:
         transport = ASGITransport(app=app_with_db)
         async with AsyncClient(transport=transport, base_url="http://testserver") as client:
             yield client
+
+
+@pytest_asyncio.fixture
+async def integration_login_credentials() -> AsyncIterator[tuple[str, str]]:
+    sessionmaker = get_sessionmaker()
+    email = f"integration-{os.urandom(4).hex()}@example.com"
+    password = "integration-password"
+    async with sessionmaker() as session:
+        user = User(
+            email=email, full_name="Integration Auth", password_hash=hash_password(password)
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+    try:
+        yield email, password
+    finally:
+        async with sessionmaker() as session:
+            await session.execute(delete(User).where(User.email == email))
+            await session.commit()
+
+
+@pytest_asyncio.fixture
+async def integration_auth_headers(
+    async_client: AsyncClient, integration_login_credentials: tuple[str, str]
+) -> dict[str, str]:
+    email, password = integration_login_credentials
+    response = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": password},
+    )
+    response.raise_for_status()
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}

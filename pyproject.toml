@@ -19,6 +19,7 @@ dependencies = [
   "passlib[bcrypt]>=1.7",
   "dramatiq[redis]>=1.16",
   "redis>=5.0",
+  "python-jose[cryptography]>=3.3.0",
 ]
 
 [project.optional-dependencies]

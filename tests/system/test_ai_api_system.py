@@ -10,18 +10,17 @@ class TestAiApiSystem:
         response = await system_client.post(
             "/api/v1/ai/execute",
             json={"input": "hello", "agent_id": "demo"},
-            headers={"X-API-Key": "test-beta-key"},
         )
         assert response.status_code == 200
         body = response.json()
         assert body["output"] == "ECHO: hello"
         assert body["meta"]["agent_id"] == "demo"
 
-    async def test_missing_beta_key_is_forbidden(self, system_client: AsyncClient) -> None:
-        response = await system_client.post(
+    async def test_missing_token_is_forbidden(self, async_client: AsyncClient) -> None:
+        response = await async_client.post(
             "/api/v1/ai/execute",
             json={"input": "oops", "agent_id": "demo"},
         )
         assert response.status_code == 401
         error = response.json()["error"]
-        assert error["message"] == "Invalid API key"
+        assert error["message"] == "Not authenticated"

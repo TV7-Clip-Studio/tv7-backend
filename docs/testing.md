@@ -19,6 +19,7 @@ System tests sit between the fast API tests and the heavier integration suite. T
 - Boot the real FastAPI application via `asgi-lifespan` so middleware, dependency overrides, and startup events execute.
 - Override `app.deps.db.get_session` to reuse the async session factory from `tests/conftest.py` while keeping each request transactional.
 - Stub external side effects (e.g., background queue dispatch) using `monkeypatch`/`AsyncMock` so we can assert scheduling while avoiding long-running jobs.
+- Authenticate through `/api/v1/auth/login`; fixtures such as `system_client` request a JWT and attach it to every call.
 
 Add new system tests in `tests/system/` when you need to exercise:
 
@@ -38,8 +39,8 @@ If Docker is unavailable locally, set `TEST_DATABASE_URL` to point at a Postgres
 
 1. Prefer the fastest layer that still exercises the behaviour you’re touching.
 2. Use dependency overrides (`app.dependency_overrides[...]`) or fixtures to inject fake collaborators.
-3. When tests mutate environment variables (like `BETA_API_KEY`), set them with `monkeypatch` to avoid cross-test leakage.
-4. Keep assertions focused on externally observable behaviour—responses, DB state changes, queued jobs—rather than private implementation details.
+3. When a route requires authentication, hit `/api/v1/auth/login` (or use the provided fixtures) to obtain a bearer token instead of bypassing middleware.
+4. When tests mutate environment variables, set them with `monkeypatch` to avoid cross-test leakage.
+5. Keep assertions focused on externally observable behaviour—responses, DB state changes, queued jobs—rather than private implementation details.
 
 Refer to `tests/system/test_videos_api_system.py` and `tests/integration/test_users_api_integration.py` as examples for new scenarios.
-

@@ -2,6 +2,12 @@
 
 This guide keeps autonomous or semi-autonomous contributors aligned while evolving the FastAPI YouTube → Shorts pipeline. Treat it as the contract for day-to-day execution.
 
+## Onboarding Checklist
+1. **Read the docs first:** Start with `docs/roadmap.md`, `docs/architecture.md`, `docs/testing.md`, and `docs/roadmap_rationale.md`. These are your primary sources of truth—understand the current milestones, system shape, and expectations before touching code.
+2. **Review existing code paths:** Skim the service/repository layers in `src/app` and the accompanying tests to see how endpoints and background tasks are structured. Look for prior art before introducing new patterns.
+3. **Align with the roadmap:** Confirm the task you’re tackling maps to a roadmap item (e.g., Phase 1.4.x). If you’re unsure where a change fits, document assumptions and seek clarification.
+4. **Plan your approach:** Capture the intended changes (data shape, API behaviour, test impact) in notes or issue comments before implementing. Discuss deviations from established patterns up front.
+
 ## Core Principles
 - **Operator-first clarity:** Code, docs, and admin views must be easy for a human operator to run and debug. Prefer explicit naming, small modules, and comments only when they add real insight.
 - **Single-service mindset:** Build every feature (API, UI, workers) inside this FastAPI project unless the roadmap explicitly calls for a new service.

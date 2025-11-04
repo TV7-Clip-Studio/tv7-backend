@@ -4,6 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from app.core.jwt import TokenType
 from app.db.models import ClipStatus, VideoStatus
 
 
@@ -26,6 +27,28 @@ class UserRead(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class Token(BaseModel):
+    access_token: str
+    refresh_token: str | None = None
+    token_type: str = "bearer"
+
+
+class TokenPayload(BaseModel):
+    sub: EmailStr
+    type: TokenType
+    exp: int
+    iat: int
+
+
+class TokenRefreshRequest(BaseModel):
+    refresh_token: str
 
 
 class ClipRead(BaseModel):

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Any
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from app.db.models import User
 from app.deps.rate_limit import check_rate
-from app.deps.security import require_beta_key
+from app.deps.security import require_jwt_user
 from app.services.ai import execute_agent
 
 router = APIRouter()
@@ -24,16 +25,12 @@ class AIResponse(BaseModel):
     meta: dict[str, Any] = Field(default_factory=dict)
 
 
-@router.post(
-    "/execute",
-    response_model=AIResponse,
-    dependencies=[Depends(require_beta_key)],
-)
+@router.post("/execute", response_model=AIResponse)
 async def execute(
     payload: AIRequest,
-    x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
+    current_user: User = Depends(require_jwt_user),
 ) -> AIResponse:
-    check_rate(x_api_key or "anon")
+    check_rate(current_user.email)
     result = execute_agent(
         agent_id=payload.agent_id,
         user_input=payload.input,

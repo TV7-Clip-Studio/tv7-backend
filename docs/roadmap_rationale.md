@@ -84,7 +84,29 @@
 ### 1.3 — Background execution infrastructure (Dramatiq + Redis) ✅
 - **Why:** Downloading and rendering videos is CPU-bound; requests must not block. We need durable background processing with retries and observability.
 - **Implementation overview:** Introduced Dramatiq with Redis broker (`REDIS_URL`, `DRAMATIQ_BROKER`, `WORKER_CONCURRENCY`), added `scripts/run_worker.py`, and wired Docker Compose/Fly to run a dedicated worker alongside Redis. `app/services/tasks.py` defines actors (`process_video`, `download_video`, `detect_highlights`, `finalize_video`) that currently stub downstream work but drive the state machine (`ingested` → `processing` → `ready`). `services/ingest.enqueue_video` now enqueues the orchestrator actor. Tests cover status transitions and enqueue behavior.
-- **Important:** Placeholder actors log and update database state; modules 1.4–1.7 will replace the stubs with real implementations. Operators should launch Redis + worker locally via `docker compose up redis worker` or `make worker` (stub broker). Fly deployment now includes a worker process group; ensure Redis credentials are configured in secrets.
+- **Important:** Placeholder actors log and update database state; modules 1.5–1.8 will replace the stubs with real implementations. Operators should launch Redis + worker locally via `docker compose up redis worker` or `make worker` (stub broker). Fly deployment now includes a worker process group; ensure Redis credentials are configured in secrets.
+
+### 1.4.0 — API layering + authentication foundations ✅
+- **Why:** Keeping FastAPI routers thin improves readability, reuse, and testability, while preparing for stronger authentication than a shared beta key.
+- **Implementation overview:** Added `app/deps/db.get_session` plus repository constructors, migrated database access into `app/repositories/*`, introduced `app/services/*` for orchestration, and updated routers to validate requests and serialize ORM entities to schemas. Bootstrapped a `tests/system/` suite to exercise HTTP flows end-to-end. Documentation now captures the layering and testing strategy, and the roadmap stakes out the upcoming JWT migration.
+- **Important:** Follow this pattern for new endpoints; target services/repositories in unit tests and rely on system/integration suites for end-to-end behaviour. The beta key remains temporary—Phase 1.4 lays the groundwork for the JWT rollout in subsequent milestones.
+
+### 1.4.1 — JWT configuration & auth services ✅
+- **Why:** Token settings and helpers must exist before the API can issue signed credentials.
+- **Implementation overview:** Added JWT config to settings/environment, created encode/decode helpers in `app/core/jwt.py`, and built `app/services/auth.py` to authenticate users and mint access/refresh tokens.
+- **Important:** Secrets live in environment variables; adjust expirations as needed per environment.
+
+### 1.4.2 — Secure routes with JWT bearer tokens ✅
+- **Why:** Replace the beta key with per-user authentication and authorization.
+- **Implementation overview:** Added `/api/v1/auth/login` and `/api/v1/auth/refresh`, introduced `require_jwt_user`, updated v1 routers to depend on bearer auth, and configured Swagger to persist the token.
+- **Important:** Health/ready/version endpoints remain public; admin basic-auth guard still layers on top of JWT where required.
+
+### 1.4.3 — Testing & documentation updates ✅
+- **Why:** All suites and docs must reflect the new auth flow to avoid regressions and onboarding friction.
+- **Implementation overview:** Updated fixtures to create/login users automatically (unit, system, integration), reworked tests to send bearer tokens, and refreshed docs/README/testing guides with the JWT flow.
+- **Important:** Consumers should use the login endpoint rather than the legacy beta key, which is now documented as transitional only.
+
+### 1.5 — `services/youtube_downloader.py`
 
 ### 1.4 — `services/youtube_downloader.py`
 - **Why:** Provides deterministic retrieval of source media and transcripts.

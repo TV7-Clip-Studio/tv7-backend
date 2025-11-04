@@ -5,18 +5,15 @@ from pydantic import BaseModel, HttpUrl
 
 from app.db.models import VideoStatus
 from app.deps.db import get_video_repository
-from app.deps.security import require_beta_key
 from app.repositories.videos import VideoRepository
 from app.schemas import VideoRead
 from app.services.videos import (
     InvalidYouTubeURL,
     VideoIngestionResult,
 )
-from app.services.videos import (
-    ingest_video as ingest_video_service,
-)
+from app.services.videos import ingest_video as ingest_video_service
 
-router = APIRouter(dependencies=[Depends(require_beta_key)])
+router = APIRouter()
 
 
 class VideoIngestRequest(BaseModel):
