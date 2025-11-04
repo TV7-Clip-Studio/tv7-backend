@@ -1,0 +1,179 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Video #{{ video.id }} · Shorts Factory{% endblock %}
+
+{% block header %}
+  <span style="display:block; font-size: 0.85rem; color: #94a3b8;">Welcome back, {{ user.full_name or user.email }}</span>
+{% endblock %}
+
+{% block header_actions %}
+  <form class="inline" method="post" action="/admin/logout">
+    <button class="btn btn-secondary" type="submit">Sign out</button>
+  </form>
+{% endblock %}
+
+{% block content %}
+  <nav style="margin-bottom: 1.5rem;">
+    <a href="/admin/videos" style="text-decoration: none; color: #94a3b8;">← Back to videos</a>
+  </nav>
+
+  <section class="card" style="margin-bottom: 2rem;">
+    <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+      <div>
+        <h1 style="margin: 0 0 0.5rem;">Video #{{ video.id }}</h1>
+        {% set video_class = 'status--' + video.status %}
+        <span class="status {{ video_class }}">
+          {{ video.status.replace('_', ' ') | title }}
+        </span>
+      </div>
+    </div>
+
+    <div style="margin-top: 1rem;">
+      <p style="margin: 0.25rem 0; color: #94a3b8; font-size: 0.9rem;">
+        <strong>Source:</strong> <a href="{{ video.source_url }}" target="_blank" rel="noreferrer noopener">{{ video.source_url }}</a>
+      </p>
+      <p style="margin: 0.25rem 0; color: #94a3b8; font-size: 0.9rem;">
+        <strong>Created:</strong> {{ video.created_at.strftime('%Y-%m-%d %H:%M') if video.created_at else '—' }}
+      </p>
+      <p style="margin: 0.25rem 0; color: #94a3b8; font-size: 0.9rem;">
+        <strong>Updated:</strong> {{ video.updated_at.strftime('%Y-%m-%d %H:%M') if video.updated_at else '—' }}
+      </p>
+      {% if video.local_path %}
+        <p style="margin: 0.25rem 0; color: #94a3b8; font-size: 0.9rem;">
+          <strong>Path:</strong> <code style="font-size: 0.85rem;">{{ video.local_path }}</code>
+        </p>
+      {% endif %}
+    </div>
+
+    {% if video.transcript_text %}
+      <details style="margin-top: 1.5rem;">
+        <summary style="cursor: pointer; color: #60a5fa; font-weight: 600;">View transcript</summary>
+        <div style="margin-top: 1rem; padding: 1rem; background: rgba(15,23,42,0.6); border-radius: 8px; max-height: 300px; overflow-y: auto;">
+          <pre style="margin: 0; white-space: pre-wrap; font-size: 0.85rem; color: #cbd5e1;">{{ video.transcript_text }}</pre>
+        </div>
+      </details>
+    {% endif %}
+  </section>
+
+  <section>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <h2 style="margin: 0;">Clips ({{ clip_summary.total }})</h2>
+      {% if clip_summary.total > 0 %}
+        <div style="display: flex; gap: 0.5rem; font-size: 0.85rem;">
+          {% if clip_summary.ready > 0 %}
+            <span class="status status--ready">{{ clip_summary.ready }} ready</span>
+          {% endif %}
+          {% if clip_summary.rendering > 0 %}
+            <span class="status status--rendering">{{ clip_summary.rendering }} rendering</span>
+          {% endif %}
+          {% if clip_summary.published > 0 %}
+            <span class="status status--published">{{ clip_summary.published }} published</span>
+          {% endif %}
+          {% if clip_summary.errored > 0 %}
+            <span class="status status--error">{{ clip_summary.errored }} error</span>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+
+    {% if video.clips %}
+      <div class="grid two">
+        {% for clip in video.clips %}
+          <article class="card" style="background: rgba(15,23,42,0.7); border: 1px solid rgba(148,163,184,0.12);">
+            <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 0.75rem;">
+              <strong style="font-size: 1.1rem;">Clip #{{ clip.id }}</strong>
+              {% set clip_class = 'status--ready' %}
+              {% if clip.status == 'rendering' %}
+                {% set clip_class = 'status--rendering' %}
+              {% elif clip.status.startswith('published') %}
+                {% set clip_class = 'status--published' %}
+              {% elif clip.status == 'error' %}
+                {% set clip_class = 'status--error' %}
+              {% endif %}
+              <span class="status {{ clip_class }}">
+                {{ clip.status.replace('_', ' ') | title }}
+              </span>
+            </div>
+
+            <div style="margin-bottom: 0.75rem;">
+              <p style="margin: 0.25rem 0; color: #94a3b8; font-size: 0.85rem;">
+                <strong>Timing:</strong> {{ clip.start_sec }}s → {{ clip.end_sec }}s ({{ clip.end_sec - clip.start_sec }}s duration)
+              </p>
+              {% if clip.caption_text %}
+                <p style="margin: 0.5rem 0; color: #e2e8f0; font-size: 0.95rem; padding: 0.75rem; background: rgba(30,41,59,0.6); border-radius: 8px; border-left: 3px solid #34d399;">
+                  {{ clip.caption_text }}
+                </p>
+              {% endif %}
+            </div>
+
+            {% if clip.local_path %}
+              <div style="margin-bottom: 0.75rem;">
+                <p style="margin: 0 0 0.5rem; font-size: 0.85rem; color: #94a3b8;">
+                  <strong>Preview:</strong>
+                </p>
+                <div style="background: rgba(15,23,42,0.8); border-radius: 8px; padding: 1rem; text-align: center;">
+                  <video
+                    controls
+                    style="max-width: 100%; max-height: 400px; border-radius: 8px;"
+                    src="{{ clip.local_path }}"
+                  >
+                    Your browser does not support video playback.
+                  </video>
+                </div>
+                <p style="margin: 0.5rem 0 0; font-size: 0.75rem; color: #64748b;">
+                  <code>{{ clip.local_path }}</code>
+                </p>
+              </div>
+            {% else %}
+              <div style="padding: 2rem; text-align: center; background: rgba(15,23,42,0.5); border-radius: 8px; border: 1px dashed rgba(148,163,184,0.3);">
+                <p style="margin: 0; color: #94a3b8; font-size: 0.9rem;">No preview available yet</p>
+              </div>
+            {% endif %}
+
+            {% if clip.status == 'ready' or clip.status.startswith('published') %}
+              <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(148,163,184,0.15);">
+                <p style="margin: 0 0 0.5rem; font-size: 0.85rem; color: #94a3b8;">
+                  <strong>Publish to:</strong>
+                </p>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                  <button class="btn" style="font-size: 0.85rem; padding: 0.4rem 1rem;" disabled title="Coming soon">
+                    YouTube Shorts
+                  </button>
+                  <button class="btn" style="font-size: 0.85rem; padding: 0.4rem 1rem;" disabled title="Coming soon">
+                    TikTok
+                  </button>
+                  <button class="btn" style="font-size: 0.85rem; padding: 0.4rem 1rem;" disabled title="Coming soon">
+                    Instagram Reels
+                  </button>
+                </div>
+                <p style="margin: 0.5rem 0 0; font-size: 0.75rem; color: #64748b;">
+                  Publishing integrations coming in Phase 2
+                </p>
+              </div>
+            {% endif %}
+
+            <div style="margin-top: 0.75rem; font-size: 0.75rem; color: #64748b;">
+              <p style="margin: 0;">Created: {{ clip.created_at.strftime('%Y-%m-%d %H:%M') if clip.created_at else '—' }}</p>
+              <p style="margin: 0;">Updated: {{ clip.updated_at.strftime('%Y-%m-%d %H:%M') if clip.updated_at else '—' }}</p>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="card" style="padding: 3rem; text-align: center; background: rgba(15,23,42,0.5);">
+        <p style="margin: 0; color: #94a3b8; font-size: 1.1rem;">No clips generated yet</p>
+        <p style="margin: 0.5rem 0 0; color: #64748b; font-size: 0.9rem;">
+          {% if video.status == 'ingested' %}
+            Video is queued for processing
+          {% elif video.status == 'processing' %}
+            Video is currently being processed
+          {% elif video.status == 'error' %}
+            An error occurred during processing
+          {% else %}
+            Clips will appear here once processing completes
+          {% endif %}
+        </p>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

@@ -20,7 +20,7 @@ from app.services.auth import (
     issue_tokens_for_user,
     resolve_user_from_token,
 )
-from app.services.videos import InvalidYouTubeURL, ingest_video, list_videos
+from app.services.videos import InvalidYouTubeURL, get_video_detail, ingest_video, list_videos
 
 SESSION_COOKIE_NAME = "admin_session"
 
@@ -121,6 +121,30 @@ async def videos_dashboard(
         "flash": flash,
     }
     return templates.TemplateResponse(request, "admin/videos.html", context)
+
+
+@router.get("/videos/{video_id}", response_class=HTMLResponse)
+async def video_detail(
+    request: Request,
+    video_id: int,
+    video_repo: VideoRepository = Depends(get_video_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+) -> Response:
+    user = await _current_admin_user(request, user_repo)
+    if not user:
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    entry = await get_video_detail(video_repo, video_id)
+    if not entry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found")
+
+    context = {
+        "request": request,
+        "user": user,
+        "video": entry.video,
+        "clip_summary": entry.clips,
+    }
+    return templates.TemplateResponse(request, "admin/video_detail.html", context)
 
 
 @router.post("/videos/ingest")

@@ -116,6 +116,14 @@ def _summarize_clips(clips: Iterable[Clip]) -> ClipSummary:
     )
 
 
+async def get_video_detail(repo: VideoRepository, video_id: int) -> VideoDashboardEntry | None:
+    """Return a single video with clip summary for the detail view."""
+    video = await repo.get_with_clips(video_id)
+    if not video:
+        return None
+    return VideoDashboardEntry(video=video, clips=_summarize_clips(video.clips))
+
+
 async def list_videos(repo: VideoRepository) -> list[VideoDashboardEntry]:
     """Return dashboard-friendly summaries ordered by newest video first."""
 

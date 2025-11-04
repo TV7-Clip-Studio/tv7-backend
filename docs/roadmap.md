@@ -25,14 +25,14 @@
 - 1.4.1 ✅ Add JWT configuration, token utilities, and auth service for issuing access/refresh tokens.
 - 1.4.2 ✅ Replace beta-key dependencies with JWT bearer auth across protected routers, update Swagger security schemes, and add login endpoints.
 - 1.4.3 ✅ Update tests/docs to reflect the JWT flow (system/integration suites request tokens) and finalize beta-key deprecation plan.
-- 1.5 Build authenticated operator dashboard: HTML login backed by JWT cookies, `/admin` templates for video and clip views, ingestion form, and publish controls.
+- 1.5.1 ✅ Build authenticated operator dashboard: HTML login backed by JWT cookies, `/admin` templates for video and clip views, ingestion form, and publish controls (stub).
+- 1.5.2 ✅ Deliver internal admin routes `/admin/videos` and `/admin/videos/{video_id}` with Jinja templates: list view, per-video clip gallery, preview players, and buttons wired to the publish endpoint stub.
+- 1.5.3 ✅ Add admin-side ingestion workflow: `/admin/videos/new` (or inline modal) that lets operators paste a YouTube URL, submits to `POST /videos/ingest`, and shows immediate feedback/status polling.
 - 1.6 Write `services/youtube_downloader.py` to download the highest-quality stream, fetch captions/transcript (youtube-transcript-api + fallback), persist artifacts, and update the `Video`.
 - 1.7 Implement `services/highlight_detector.py` that calls the LLM, parses 3–5 segments with `{start_sec, end_sec, hook}`, handles parsing errors, and creates `Clip` rows (`status=rendering`).
 - 1.8 Build `services/clipper.py` that slices video segments with ffmpeg, converts to 9:16 framing, manages temp files, and hands off to the subtitle renderer.
 - 1.9 Create `services/subtitle_styler.py` to extract transcript snippets, render social-style captions (font, outline, positioning), burn them into the clip, and update `Clip.local_path` + `status=ready`.
 - 1.10 Expose `GET /status/{video_id}` (overall state + per-clip summaries) and `GET /videos/{video_id}/clips` (detailed clip metadata, previews, captions) for polling and UI consumption.
-- 1.11 Deliver internal admin routes `/admin/videos` and `/admin/videos/{video_id}` with Jinja templates: list view, per-video clip gallery, preview players, and buttons wired to the publish endpoint stub.
-- 1.12 Add admin-side ingestion workflow: `/admin/videos/new` (or inline modal) that lets operators paste a YouTube URL, submits to `POST /videos/ingest`, and shows immediate feedback/status polling.
 
 ## Phase 2 — Operational Polish (Queued)
 - 2.1 Add `PublishJob` ORM model/migration covering platform enum, status, response payload, timestamps.

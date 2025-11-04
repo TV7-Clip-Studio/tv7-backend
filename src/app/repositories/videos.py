@@ -30,6 +30,13 @@ class VideoRepository:
         await self._session.refresh(video)
         return video
 
+    async def get_with_clips(self, video_id: int) -> Video | None:
+        """Fetch a single video with clips eagerly loaded."""
+        stmt = select(Video).options(selectinload(Video.clips)).where(Video.id == video_id)
+        result = await self._session.execute(stmt)
+        video: Video | None = result.scalar_one_or_none()
+        return video
+
     async def list_with_clips(self, *, limit: int | None = None) -> list[Video]:
         stmt = select(Video).options(selectinload(Video.clips)).order_by(Video.created_at.desc())
         if limit is not None:
