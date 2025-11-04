@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Operator Dashboard{% endblock %}</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      body {
+        margin: 0;
+        background: #0f172a;
+        color: #f8fafc;
+      }
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 2rem 1.5rem 3rem;
+      }
+      header {
+        background: #0b1120;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+        padding: 1rem 1.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      a, a:visited {
+        color: #34d399;
+      }
+      button, input, select, textarea {
+        font: inherit;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        background: #34d399;
+        color: #0f172a;
+        border: none;
+        border-radius: 9999px;
+        padding: 0.5rem 1.25rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+      }
+      .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 25px rgba(52, 211, 153, 0.25);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: #e2e8f0;
+        border: 1px solid rgba(148, 163, 184, 0.4);
+      }
+      .card {
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.9));
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 16px;
+        padding: 1.5rem;
+        box-shadow: 0 20px 45px rgba(15, 23, 42, 0.35);
+        backdrop-filter: blur(12px);
+      }
+      .grid {
+        display: grid;
+        gap: 1.5rem;
+      }
+      .grid.two {
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.85rem;
+        padding: 0.3rem 0.75rem;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.14);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .status--ready { background: rgba(74, 222, 128, 0.16); color: #4ade80; }
+      .status--ingested { background: rgba(96, 165, 250, 0.16); color: #bfdbfe; }
+      .status--processing { background: rgba(59, 130, 246, 0.18); color: #93c5fd; }
+      .status--error { background: rgba(239, 68, 68, 0.18); color: #fca5a5; }
+      .status--rendering { background: rgba(244, 114, 182, 0.16); color: #f472b6; }
+      .status--published { background: rgba(45, 212, 191, 0.16); color: #5eead4; }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      .flash {
+        background: rgba(52, 211, 153, 0.18);
+        border: 1px solid rgba(52, 211, 153, 0.35);
+        border-radius: 12px;
+        padding: 0.75rem 1rem;
+        color: #bbf7d0;
+      }
+      .error {
+        background: rgba(239, 68, 68, 0.18);
+        border: 1px solid rgba(248, 113, 113, 0.35);
+        color: #fecaca;
+      }
+      form.inline {
+        display: inline;
+      }
+    </style>
+    {% block head %}{% endblock %}
+  </head>
+  <body>
+    <header>
+      <div>
+        <strong>Shorts Factory</strong>
+        {% block header %}{% endblock %}
+      </div>
+      {% block header_actions %}{% endblock %}
+    </header>
+    <main>
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>

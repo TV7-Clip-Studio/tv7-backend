@@ -35,7 +35,7 @@ async def ingest_video_endpoint(
         result = await ingest_video_service(str(payload.youtube_url), repo=repo)
     except InvalidYouTubeURL as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         ) from exc
 
