@@ -106,39 +106,42 @@
 - **Implementation overview:** Updated fixtures to create/login users automatically (unit, system, integration), reworked tests to send bearer tokens, and refreshed docs/README/testing guides with the JWT flow.
 - **Important:** Consumers should use the login endpoint rather than the legacy beta key, which is now documented as transitional only.
 
-### 1.5 — `services/youtube_downloader.py`
+### 1.5 — Authenticated operator dashboard
+- **Why:** Operators need a secure web surface to review pipeline output, trigger ingestion, and manage publishing without reaching for API tooling.
+- **Implementation overview:** Serve `/admin` pages via Jinja templates backed by JWT cookies. Provide login/logout views, list videos with clip rollups and status badges, embed ingestion and publish controls, and wire async fetches to existing API endpoints.
+- **Important:** Cookies must be HTTP-only and respect environment-driven security flags. Reuse the FastAPI authentication stack so API tokens and dashboard sessions stay aligned.
 
-### 1.4 — `services/youtube_downloader.py`
+### 1.6 — `services/youtube_downloader.py`
 - **Why:** Provides deterministic retrieval of source media and transcripts.
 - **Implementation overview:** Use pytube/yt-dlp for video download and `youtube-transcript-api` for captions. Normalize outputs to configured storage directory, persist file sizes, handle missing captions (fallback to Whisper if needed).
 - **Important:** Respect rate limits; store transcripts in UTF-8; guard against large file sizes by choosing appropriate stream quality (720p baseline).
 
-### 1.5 — `services/highlight_detector.py`
+### 1.7 — `services/highlight_detector.py`
 - **Why:** Converts transcripts into candidate shorts via LLM heuristics.
 - **Implementation overview:** Prompt engineering with system instructions to produce JSON segments. Parse responses with pydantic models, validate durations, and create `Clip` rows with `status=rendering`.
 - **Important:** Handle LLM failures gracefully (retry, fallback heuristics). Store raw LLM output for debugging in the database or logs.
 
-### 1.6 — `services/clipper.py`
+### 1.8 — `services/clipper.py`
 - **Why:** Efficiently slices source video into vertical shorts.
 - **Implementation overview:** Wrap ffmpeg CLI or python-ffmpeg bindings to extract subclips, rescale/crop to 9:16, and output high-bitrate MP4. Manage temp directories and ensure deterministic filenames.
 - **Important:** Validate clip durations (< 60s). Handle edge cases where requested timestamps exceed video length by clamping values.
 
-### 1.7 — `services/subtitle_styler.py`
+### 1.9 — `services/subtitle_styler.py`
 - **Why:** On-brand subtitles increase engagement; aligning text with audio is part of MVP.
 - **Implementation overview:** Derive transcript segment per clip, generate SRT or ASS overlays, and burn into the video via ffmpeg `subtitles` or `drawtext`. Apply consistent styling (font path, color, outline).
 - **Important:** Support fallback when transcripts missing—allow manual caption text or degrade gracefully. Cache fonts in repo or document installation.
 
-### 1.8 — `GET /status/{video_id}` & `GET /videos/{video_id}/clips`
+### 1.10 — `GET /status/{video_id}` & `GET /videos/{video_id}/clips`
 - **Why:** Enables polling and UI state management.
 - **Implementation overview:** Create new router entries returning Pydantic schemas (VideoRead, ClipRead). Include statuses, timestamps, local/preview URLs. Consider caching to reduce DB load on frequent polling.
 - **Important:** Secure endpoints via API key auth; handle 404/410 when video deleted.
 
-### 1.9 — Admin HTML routes
+### 1.11 — Admin HTML routes
 - **Why:** Provide human validation loop before publishing.
 - **Implementation overview:** Use Jinja2 templates with Bootstrap/Tailwind-lite styling. `/admin/videos` lists videos with status badges; `/admin/videos/{video_id}` renders clip cards, preview players (HTML5 video), caption text, and publish buttons hitting API endpoints.
 - **Important:** Reuse the authentication scaffold (0.12). Keep templates responsive and degrade gracefully if media unavailable.
 
-### 1.10 — Admin ingestion workflow
+### 1.12 — Admin ingestion workflow
 - **Why:** Operators need a single dashboard to start processing without touching API clients.
 - **Implementation overview:** Add `/admin/videos/new` view or inline form on `/admin/videos` that accepts a YouTube URL, posts to `POST /videos/ingest`, and displays success/error messaging. Trigger status polling so the page reflects progression without manual refresh.
 - **Important:** Validate inputs client-side and server-side. Surface existing video conflicts with actionable guidance (link to current record, option to reprocess).

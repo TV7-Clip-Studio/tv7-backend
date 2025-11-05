@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable
+from collections import Counter
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
+from datetime import datetime
 from urllib.parse import urlparse
 
-from app.db.models import Video, VideoStatus
+from app.db.models import Clip, ClipStatus, Video, VideoStatus
 from app.repositories.videos import VideoRepository
 from app.services.ingest import enqueue_video
 
@@ -23,6 +25,39 @@ class VideoIngestionResult:
     video: Video
     created: bool
     queued: bool = True
+
+
+@dataclass(slots=True)
+class ClipSummary:
+    total: int
+    counts: dict[str, int]
+    latest_updated_at: datetime | None
+
+    def count(self, status: ClipStatus | str) -> int:
+        key = status.value if isinstance(status, ClipStatus) else str(status)
+        return self.counts.get(key, 0)
+
+    @property
+    def ready(self) -> int:
+        return self.count(ClipStatus.READY)
+
+    @property
+    def rendering(self) -> int:
+        return self.count(ClipStatus.RENDERING)
+
+    @property
+    def published(self) -> int:
+        return self.count(ClipStatus.PUBLISHED_PARTIAL) + self.count(ClipStatus.PUBLISHED_ALL)
+
+    @property
+    def errored(self) -> int:
+        return self.count(ClipStatus.ERROR)
+
+
+@dataclass(slots=True)
+class VideoDashboardEntry:
+    video: Video
+    clips: ClipSummary
 
 
 async def _default_dispatch(video_id: int, source_url: str) -> None:
@@ -60,3 +95,39 @@ async def ingest_video(
     video = await repo.refresh(video)
 
     return VideoIngestionResult(video=video, created=created)
+
+
+def _summarize_clips(clips: Iterable[Clip]) -> ClipSummary:
+    counts: Counter = Counter()
+    latest_updated: datetime | None = None
+
+    for clip in clips:
+        counts[clip.status] += 1
+        if clip.updated_at and (latest_updated is None or clip.updated_at > latest_updated):
+            latest_updated = clip.updated_at
+
+    for status in ClipStatus:
+        counts.setdefault(status.value, 0)
+
+    return ClipSummary(
+        total=sum(counts.values()),
+        counts=dict(counts),
+        latest_updated_at=latest_updated,
+    )
+
+
+async def get_video_detail(repo: VideoRepository, video_id: int) -> VideoDashboardEntry | None:
+    """Return a single video with clip summary for the detail view."""
+    video = await repo.get_with_clips(video_id)
+    if not video:
+        return None
+    return VideoDashboardEntry(video=video, clips=_summarize_clips(video.clips))
+
+
+async def list_videos(repo: VideoRepository) -> list[VideoDashboardEntry]:
+    """Return dashboard-friendly summaries ordered by newest video first."""
+
+    videos = await repo.list_with_clips()
+    return [
+        VideoDashboardEntry(video=video, clips=_summarize_clips(video.clips)) for video in videos
+    ]

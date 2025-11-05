@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from app.admin.routes import router as admin_router
 from app.api.v1.routes import api_router
 from app.core.config import settings
 from app.core.errors import install_exception_handlers
@@ -58,6 +59,7 @@ install_exception_handlers(app)
 
 # API
 app.include_router(api_router, prefix="/api/v1")
+app.include_router(admin_router)
 
 
 # Utility endpoints

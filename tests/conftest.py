@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from collections.abc import AsyncIterator, Generator
 from typing import Any
@@ -26,6 +27,12 @@ from app.db.models import User
 from app.main import app
 
 os.environ.setdefault("DRAMATIQ_BROKER", "stub")
+
+
+@pytest.fixture(scope="session")
+def anyio_backend() -> str:
+    """Force pytest-anyio to use asyncio backend."""
+    return "asyncio"
 
 
 @pytest.fixture(scope="session")
@@ -100,6 +107,44 @@ async def configure_app_database(
 
     monkeypatch.setattr(db_base, "create_async_engine", _create_engine_stub)
     monkeypatch.setattr(db_base, "async_sessionmaker", _session_factory_stub)
+
+    monkeypatch.setenv("DRAMATIQ_BROKER", "stub")
+    import dramatiq  # noqa: PLC0415
+    from dramatiq.brokers.stub import StubBroker  # noqa: PLC0415
+
+    from app.core import config as app_config  # noqa: PLC0415
+    from app.services import queue as queue_module  # noqa: PLC0415
+    from app.services import tasks as tasks_module  # noqa: PLC0415
+
+    app_config.settings.DRAMATIQ_BROKER = "stub"
+
+    stub_broker = StubBroker()
+
+    def _get_stub_broker() -> StubBroker:
+        return stub_broker
+
+    queue_module.get_broker.cache_clear()
+    monkeypatch.setattr(queue_module, "get_broker", _get_stub_broker, raising=False)
+    monkeypatch.setattr(queue_module, "ensure_broker", _get_stub_broker, raising=False)
+
+    async def _enqueue_stub(
+        video_id: int, *, source_url: str
+    ) -> None:  # pragma: no cover - test helper
+        logger = logging.getLogger("tests.enqueue_stub")
+        logger.info("Stub enqueue", extra={"video_id": video_id, "source_url": source_url})
+
+    monkeypatch.setattr("app.services.ingest.get_broker", _get_stub_broker, raising=False)
+    monkeypatch.setattr("app.services.ingest.enqueue_video", _enqueue_stub, raising=False)
+    monkeypatch.setattr("app.services.videos.enqueue_video", _enqueue_stub, raising=False)
+    dramatiq.set_broker(stub_broker)
+
+    tasks_module.process_video.broker = stub_broker
+    tasks_module.download_video.broker = stub_broker
+    tasks_module.detect_highlights.broker = stub_broker
+    tasks_module.finalize_video.broker = stub_broker
+
+    assert queue_module.get_broker() is stub_broker
+    assert tasks_module.process_video.broker is stub_broker
 
     async with db_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

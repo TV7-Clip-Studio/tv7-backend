@@ -1,0 +1,91 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Dashboard · Shorts Factory{% endblock %}
+
+{% block header %}
+  <span style="display:block; font-size: 0.85rem; color: #94a3b8;">Welcome back, {{ user.full_name or user.email }}</span>
+{% endblock %}
+
+{% block header_actions %}
+  <form class="inline" method="post" action="/admin/logout">
+    <button class="btn btn-secondary" type="submit">Sign out</button>
+  </form>
+{% endblock %}
+
+{% block content %}
+  <section class="card" style="margin-bottom: 2rem;">
+    <h1 style="margin-top: 0;">Ingest a new video</h1>
+    <p style="color: #94a3b8; margin-bottom: 1rem;">Paste a YouTube URL to queue download and processing.</p>
+    {% if flash %}
+      <div class="flash" style="margin-bottom: 1rem;">{{ flash }}</div>
+    {% endif %}
+    {% if error %}
+      <div class="flash error" style="margin-bottom: 1rem;">{{ error }}</div>
+    {% endif %}
+    <form method="post" action="/admin/videos/ingest" class="stack">
+      <label>
+        <span>YouTube URL</span>
+        <input type="url" name="youtube_url" required value="{{ entered_url or '' }}"
+               placeholder="https://www.youtube.com/watch?v=..."
+               style="width: 100%; padding: 0.65rem 0.75rem; border-radius: 0.75rem; border: 1px solid rgba(148,163,184,0.3); background: rgba(15,23,42,0.6); color: inherit;">
+      </label>
+      <button class="btn" type="submit">Queue video</button>
+    </form>
+  </section>
+
+  <section class="stack">
+    <h2 style="margin: 0;">Recent videos</h2>
+    {% if videos %}
+      <div class="grid">
+        {% for entry in videos %}
+          {% set video = entry.video %}
+          {% set clip_summary = entry.clips %}
+          <article class="card stack">
+            <div style="display:flex; justify-content: space-between; align-items: center;">
+              <div>
+                <h3 style="margin: 0 0 0.35rem;">
+                  <a href="/admin/videos/{{ video.id }}" style="text-decoration: none; color: inherit;">
+                    Video #{{ video.id }}
+                  </a>
+                </h3>
+                <a href="{{ video.source_url }}" target="_blank" rel="noreferrer noopener" style="font-size: 0.9rem;">{{ video.source_url }}</a>
+              </div>
+              {% set video_class = 'status--' + video.status %}
+              <span class="status {{ video_class }}">
+                {{ video.status.replace('_', ' ') | title }}
+              </span>
+            </div>
+            <div style="font-size: 0.85rem; color: #94a3b8;">
+              Created {{ video.created_at.strftime('%Y-%m-%d %H:%M') if video.created_at else '—' }}
+            </div>
+
+            {% if clip_summary.total %}
+              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; font-size: 0.85rem; margin-top: 0.5rem;">
+                <span style="color: #94a3b8;">{{ clip_summary.total }} clip{{ 's' if clip_summary.total != 1 else '' }}</span>
+                {% if clip_summary.ready > 0 %}
+                  <span class="status status--ready">{{ clip_summary.ready }} ready</span>
+                {% endif %}
+                {% if clip_summary.rendering > 0 %}
+                  <span class="status status--rendering">{{ clip_summary.rendering }} rendering</span>
+                {% endif %}
+                {% if clip_summary.published > 0 %}
+                  <span class="status status--published">{{ clip_summary.published }} published</span>
+                {% endif %}
+                {% if clip_summary.errored > 0 %}
+                  <span class="status status--error">{{ clip_summary.errored }} error</span>
+                {% endif %}
+              </div>
+              <a href="/admin/videos/{{ video.id }}" style="display: inline-block; margin-top: 0.75rem; font-size: 0.9rem;">
+                View details →
+              </a>
+            {% else %}
+              <p style="color: #94a3b8; margin: 0;">No clips generated yet.</p>
+            {% endif %}
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p style="color: #94a3b8;">No videos ingested yet. Start by queuing a URL above.</p>
+    {% endif %}
+  </section>
+{% endblock %}

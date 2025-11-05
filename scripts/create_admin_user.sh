@@ -117,8 +117,8 @@ def ensure_password() -> str:
 async def main() -> None:
     connect_args: dict[str, object] = {}
     if database_url.startswith("postgresql+asyncpg"):
-        host = urlparse(database_url).hostname or ""
-        if host not in {"localhost", "127.0.0.1"}:
+        host = (urlparse(database_url).hostname or "").lower()
+        if host not in {"localhost", "127.0.0.1", "postgres"}:
             connect_args["ssl"] = "require"
 
     local_password = ensure_password()

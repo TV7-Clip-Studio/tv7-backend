@@ -1,3 +1,5 @@
 from __future__ import annotations
 
-__all__ = ["credentials"]
+from . import routes
+
+__all__ = ["credentials", "routes"]

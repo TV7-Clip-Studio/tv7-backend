@@ -25,9 +25,9 @@ def _engine_factory() -> AsyncEngine:
     database_url = str(settings.DATABASE_URL)
     connect_args: dict[str, object] = {}
     if database_url.startswith("postgresql+asyncpg"):
-        host = urlparse(database_url).hostname or ""
-        if host not in {"localhost", "127.0.0.1"}:
-            # Neon requires TLS; asyncpg expects the ssl flag instead of sslmode.
+        host = (urlparse(database_url).hostname or "").lower()
+        if host not in {"localhost", "127.0.0.1", "postgres"}:
+            # Require TLS unless the connection points to a local/dev host.
             connect_args["ssl"] = "require"
 
     return create_async_engine(
