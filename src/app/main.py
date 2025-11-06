@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
@@ -60,6 +61,9 @@ install_exception_handlers(app)
 # API
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(admin_router)
+
+# Static files for media (videos, clips)
+app.mount("/media", StaticFiles(directory=settings.MEDIA_STORAGE_DIR), name="media")
 
 
 # Utility endpoints

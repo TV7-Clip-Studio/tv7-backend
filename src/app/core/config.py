@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRES_MINUTES: int = 30
     JWT_REFRESH_TOKEN_EXPIRES_MINUTES: int = 60 * 24 * 7  # one week
+    MEDIA_STORAGE_DIR: str = "./media"
+    VIDEO_QUALITY: str = "720p"
+    MAX_VIDEO_FILE_SIZE_MB: int = 500
+    OPENAI_API_KEY: str | None = None
 
 
 settings = Settings()

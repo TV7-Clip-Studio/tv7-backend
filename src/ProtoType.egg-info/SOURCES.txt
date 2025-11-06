@@ -35,11 +35,13 @@ src/app/repositories/videos.py
 src/app/services/__init__.py
 src/app/services/ai.py
 src/app/services/auth.py
+src/app/services/highlight_detector.py
 src/app/services/ingest.py
 src/app/services/queue.py
 src/app/services/tasks.py
 src/app/services/users.py
 src/app/services/videos.py
+src/app/services/youtube_downloader.py
 tests/test_admin_auth.py
 tests/test_admin_credentials.py
 tests/test_ai_api.py

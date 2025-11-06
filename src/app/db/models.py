@@ -54,6 +54,9 @@ class Video(Base):
     source_url: Mapped[str] = mapped_column(String(512), nullable=False)
     local_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     transcript_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    file_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(
         String(32),
         nullable=False,

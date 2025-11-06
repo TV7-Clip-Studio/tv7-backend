@@ -30,6 +30,12 @@ class VideoRepository:
         await self._session.refresh(video)
         return video
 
+    async def update(self, video: Video) -> Video:
+        """Update video and commit changes."""
+        await self._session.flush()
+        await self._session.refresh(video)
+        return video
+
     async def get_with_clips(self, video_id: int) -> Video | None:
         """Fetch a single video with clips eagerly loaded."""
         stmt = select(Video).options(selectinload(Video.clips)).where(Video.id == video_id)
@@ -45,3 +51,10 @@ class VideoRepository:
         result = await self._session.execute(stmt)
         rows = result.scalars().unique().all()
         return list(rows)
+
+    async def delete(self, video_id: int) -> None:
+        """Delete a video by ID."""
+        video = await self.get(video_id)
+        if video:
+            await self._session.delete(video)
+            await self._session.flush()

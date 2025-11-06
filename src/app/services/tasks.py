@@ -7,8 +7,15 @@ from collections.abc import Coroutine
 from dramatiq import actor
 
 from app.db.base import session_scope
-from app.db.models import Video, VideoStatus
+from app.db.models import Clip, ClipStatus, Video, VideoStatus
+from app.services.highlight_detector import HighlightDetectionError
+from app.services.highlight_detector import detect_highlights as detect_highlights_service
 from app.services.queue import ensure_broker
+from app.services.youtube_downloader import (
+    DownloadError,
+    VideoTooLargeError,
+    download_video_and_transcript,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,20 +49,168 @@ def process_video(video_id: int) -> None:
     download_video.send(video_id)
 
 
+async def _download_video_task(video_id: int) -> None:
+    """Download video and update database with results."""
+    async with session_scope() as session:
+        video = await session.get(Video, video_id)
+        if not video:
+            logger.error("Video not found for download", extra={"video_id": video_id})
+            return
+
+        try:
+            # Download video and transcript
+            result = download_video_and_transcript(video_id, video.source_url)
+
+            # Update video with download results
+            video.local_path = result.local_path
+            video.file_size_bytes = result.file_size_bytes
+            video.transcript_text = result.transcript_text
+            video.duration_seconds = result.duration_seconds
+            video.error_message = None  # Clear any previous errors
+
+            await session.flush()
+
+            logger.info(
+                "Video downloaded successfully",
+                extra={
+                    "video_id": video_id,
+                    "duration": result.duration_seconds,
+                    "file_size_mb": result.file_size_bytes / 1024 / 1024,
+                    "has_transcript": result.transcript_text is not None,
+                },
+            )
+
+        except VideoTooLargeError as exc:
+            logger.warning(
+                "Video too large",
+                extra={"video_id": video_id, "error": str(exc)},
+            )
+            video.status = VideoStatus.ERROR.value
+            video.error_message = str(exc)
+            await session.flush()
+
+        except DownloadError as exc:
+            logger.error(
+                "Video download failed",
+                extra={"video_id": video_id, "error": str(exc)},
+            )
+            video.status = VideoStatus.ERROR.value
+            video.error_message = str(exc)
+            await session.flush()
+
+        except Exception as exc:
+            logger.exception(
+                "Unexpected error downloading video",
+                extra={"video_id": video_id, "error": str(exc)},
+            )
+            video.status = VideoStatus.ERROR.value
+            video.error_message = f"Unexpected error: {exc}"
+            await session.flush()
+
+
 @actor(max_retries=3)
 def download_video(video_id: int) -> None:
-    """Download placeholder. Will be replaced with youtube_downloader integration."""
+    """Download YouTube video and transcript."""
 
-    logger.info("Download video (stub)", extra={"video_id": video_id})
-    detect_highlights.send(video_id)
+    logger.info("Starting video download", extra={"video_id": video_id})
+    _run_async(_download_video_task(video_id))
+
+    # Only continue to next stage if download succeeded
+    # Check video status to determine if we should proceed
+    async def _should_continue() -> bool:
+        async with session_scope() as session:
+            video = await session.get(Video, video_id)
+            return video is not None and video.status != VideoStatus.ERROR.value
+
+    if asyncio.run(_should_continue()):
+        detect_highlights.send(video_id)
+    else:
+        logger.warning(
+            "Skipping highlight detection due to download error",
+            extra={"video_id": video_id},
+        )
+
+
+async def _detect_highlights_task(video_id: int) -> None:
+    """Detect highlights using LLM and create Clip records."""
+    async with session_scope() as session:
+        video = await session.get(Video, video_id)
+        if not video:
+            logger.error("Video not found for highlight detection", extra={"video_id": video_id})
+            return
+
+        try:
+            # Check if we have required data
+            if not video.transcript_text:
+                raise HighlightDetectionError("No transcript available for highlight detection")
+
+            if not video.duration_seconds:
+                raise HighlightDetectionError("Video duration not available")
+
+            # Call LLM to detect highlights
+            segments = await detect_highlights_service(
+                transcript=video.transcript_text,
+                duration_seconds=video.duration_seconds,
+                video_id=video_id,
+            )
+
+            # Create Clip records for each segment
+            for segment in segments:
+                clip = Clip(
+                    video_id=video_id,
+                    start_sec=segment.start_sec,
+                    end_sec=segment.end_sec,
+                    caption_text=segment.hook,
+                    status=ClipStatus.RENDERING.value,
+                )
+                session.add(clip)
+
+            await session.flush()
+
+            logger.info(
+                "Clips created successfully",
+                extra={"video_id": video_id, "clip_count": len(segments)},
+            )
+
+        except HighlightDetectionError as exc:
+            logger.error(
+                "Highlight detection failed",
+                extra={"video_id": video_id, "error": str(exc)},
+            )
+            video.status = VideoStatus.ERROR.value
+            video.error_message = f"Highlight detection failed: {exc}"
+            await session.flush()
+
+        except Exception as exc:
+            logger.exception(
+                "Unexpected error during highlight detection",
+                extra={"video_id": video_id, "error": str(exc)},
+            )
+            video.status = VideoStatus.ERROR.value
+            video.error_message = f"Unexpected error during highlight detection: {exc}"
+            await session.flush()
 
 
 @actor(max_retries=3)
 def detect_highlights(video_id: int) -> None:
-    """Highlight detector placeholder. Will create clips once implemented."""
+    """Detect highlights using LLM and create Clip records."""
 
-    logger.info("Detect highlights (stub)", extra={"video_id": video_id})
-    finalize_video.send(video_id)
+    logger.info("Starting highlight detection", extra={"video_id": video_id})
+    _run_async(_detect_highlights_task(video_id))
+
+    # Only continue to next stage if highlight detection succeeded
+    async def _should_continue() -> bool:
+        async with session_scope() as session:
+            video = await session.get(Video, video_id)
+            return video is not None and video.status != VideoStatus.ERROR.value
+
+    if asyncio.run(_should_continue()):
+        finalize_video.send(video_id)
+    else:
+        logger.warning(
+            "Skipping finalization due to highlight detection error",
+            extra={"video_id": video_id},
+        )
 
 
 @actor(max_retries=3)
