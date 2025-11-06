@@ -46,7 +46,7 @@ def test_update_env_file_overrides_existing_values(tmp_path: Path) -> None:
     env_file.write_text(
         os.linesep.join(
             [
-                "APP_NAME=Forgotten App",
+                "APP_NAME=TV7",
                 "# comment should remain",
                 "ADMIN_USERNAME=old",
                 "ADMIN_PASSWORD=old-pass",
@@ -60,7 +60,7 @@ def test_update_env_file_overrides_existing_values(tmp_path: Path) -> None:
 
     assert "ADMIN_USERNAME=new-admin" in content
     assert "ADMIN_PASSWORD=new-secret" in content
-    assert content[0] == "APP_NAME=Forgotten App"
+    assert content[0] == "APP_NAME=TV7"
     assert "# comment should remain" in content
 
 

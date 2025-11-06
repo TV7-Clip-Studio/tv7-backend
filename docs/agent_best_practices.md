@@ -1,6 +1,6 @@
-# Shorts Factory Agent Best Practices
+# TV7 Agent Best Practices
 
-This guide keeps autonomous or semi-autonomous contributors aligned while evolving the FastAPI YouTube → Shorts pipeline. Treat it as the contract for day-to-day execution.
+This guide keeps autonomous or semi-autonomous contributors aligned while evolving the TV7 FastAPI YouTube → Shorts pipeline. Treat it as the contract for day-to-day execution.
 
 ## Onboarding Checklist
 1. **Read the docs first:** Start with `docs/roadmap.md`, `docs/architecture.md`, `docs/testing.md`, and `docs/roadmap_rationale.md`. These are your primary sources of truth—understand the current milestones, system shape, and expectations before touching code.

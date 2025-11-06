@@ -1,7 +1,7 @@
-# Forgotten App → Shorts Factory
+# TV7
 
 ## System Purpose
-The FastAPI service turns long-form YouTube videos into ready-to-publish vertical shorts. An operator pastes a YouTube link, the system handles ingestion, AI highlight detection, automated clipping with stylized subtitles, and exposes the resulting assets for review, approval, and (stubbed) publishing. Everything lives inside this single application: API, background pipeline, storage metadata, and an internal admin dashboard.
+TV7 is a FastAPI service that turns long-form YouTube videos into ready-to-publish vertical shorts. An operator pastes a YouTube link, the system handles ingestion, AI highlight detection, automated clipping with stylized subtitles, and exposes the resulting assets for review, approval, and (stubbed) publishing. Everything lives inside this single application: API, background pipeline, storage metadata, and an internal admin dashboard.
 
 ## Core Domain Model
 - **Video**
