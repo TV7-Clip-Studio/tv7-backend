@@ -1,4 +1,4 @@
-# FastAPI Production Scaffold — Clean
+# TV7 — YouTube to Shorts Pipeline
 
 Fixes included:
 - Pydantic lists via JSON arrays in `.env`.

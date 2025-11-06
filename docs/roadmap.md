@@ -1,6 +1,6 @@
-# YouTube Shorts Factory Roadmap
+# TV7 Roadmap
 
-> Living plan for evolving the FastAPI “forgotten-app” into a single-service YouTube → Shorts production line. Update this file whenever scope or priorities shift.
+> Living plan for evolving the TV7 FastAPI application into a single-service YouTube → Shorts production line. Update this file whenever scope or priorities shift.
 
 ## Phase 0 — Platform Foundation (✅ Baseline, ⬜ To shore up)
 - 0.1 ✅ Confirm FastAPI core application (`src/app/main.py`) with router aggregation, dependency wiring, and lifespan hooks is production-ready.

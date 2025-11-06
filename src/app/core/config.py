@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True, extra="ignore")
-    APP_NAME: str = "My FastAPI Service"
+    APP_NAME: str = "TV7"
     APP_ENV: str = "dev"
     DEBUG: bool = True
     VERSION: str = "0.1.0"
