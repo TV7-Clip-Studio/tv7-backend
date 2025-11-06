@@ -1,0 +1,122 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Profile · TV7{% endblock %}
+
+{% block header %}
+  <span style="display:block; font-size: 0.85rem; color: #94a3b8;">Your Profile</span>
+{% endblock %}
+
+{% block header_actions %}
+  <form class="inline" method="post" action="/admin/logout">
+    <button class="btn btn-secondary" type="submit">Sign out</button>
+  </form>
+{% endblock %}
+
+{% block content %}
+  <nav style="margin-bottom: 1.5rem;">
+    <a href="/admin/videos" style="text-decoration: none; color: #94a3b8;">← Back to dashboard</a>
+  </nav>
+
+  {% if flash %}
+    <div class="flash" style="margin-bottom: 1.5rem;">{{ flash }}</div>
+  {% endif %}
+  {% if error %}
+    <div class="flash error" style="margin-bottom: 1.5rem;">{{ error }}</div>
+  {% endif %}
+
+  <!-- Profile Information -->
+  <section class="card" style="margin-bottom: 2rem;">
+    <h2 style="margin-top: 0;">Account Information</h2>
+
+    <div style="margin-bottom: 1.5rem;">
+      <p style="margin: 0.5rem 0; color: #94a3b8; font-size: 0.9rem;">
+        <strong style="color: #e2e8f0;">Full Name:</strong> {{ user.full_name }}
+      </p>
+      <p style="margin: 0.5rem 0; color: #94a3b8; font-size: 0.9rem;">
+        <strong style="color: #e2e8f0;">Email:</strong> {{ user.email }}
+      </p>
+      <p style="margin: 0.5rem 0; color: #94a3b8; font-size: 0.9rem;">
+        <strong style="color: #e2e8f0;">Status:</strong>
+        {% if user.is_active %}
+          <span class="status status--ready">Active</span>
+        {% else %}
+          <span class="status status--error">Inactive</span>
+        {% endif %}
+      </p>
+      <p style="margin: 0.5rem 0; color: #94a3b8; font-size: 0.9rem;">
+        <strong style="color: #e2e8f0;">Member since:</strong> {{ user.created_at.strftime('%B %d, %Y') if user.created_at else '—' }}
+      </p>
+      <p style="margin: 0.5rem 0; color: #94a3b8; font-size: 0.9rem;">
+        <strong style="color: #e2e8f0;">Last updated:</strong> {{ user.updated_at.strftime('%B %d, %Y') if user.updated_at else '—' }}
+      </p>
+    </div>
+  </section>
+
+  <!-- Update Profile Form -->
+  <section class="card" style="margin-bottom: 2rem;">
+    <h2 style="margin-top: 0;">Update Profile</h2>
+    <p style="color: #94a3b8; margin-bottom: 1.5rem; font-size: 0.9rem;">
+      Update your account information below.
+    </p>
+
+    <form method="post" action="/admin/profile" class="stack">
+      <label>
+        <span style="display: block; margin-bottom: 0.35rem; color: #e2e8f0; font-weight: 500;">Full Name</span>
+        <input
+          type="text"
+          name="full_name"
+          value="{{ user.full_name }}"
+          required
+          style="width: 100%; padding: 0.65rem 0.75rem; border-radius: 0.75rem; border: 1px solid rgba(148,163,184,0.3); background: rgba(15,23,42,0.6); color: inherit;">
+      </label>
+
+      <label>
+        <span style="display: block; margin-bottom: 0.35rem; color: #e2e8f0; font-weight: 500;">Email</span>
+        <input
+          type="email"
+          name="email"
+          value="{{ user.email }}"
+          required
+          style="width: 100%; padding: 0.65rem 0.75rem; border-radius: 0.75rem; border: 1px solid rgba(148,163,184,0.3); background: rgba(15,23,42,0.6); color: inherit;">
+      </label>
+
+      <button class="btn" type="submit" name="action" value="update_profile">Update Profile</button>
+    </form>
+  </section>
+
+  <!-- Change Password Form -->
+  <section class="card">
+    <h2 style="margin-top: 0;">Change Password</h2>
+    <p style="color: #94a3b8; margin-bottom: 1.5rem; font-size: 0.9rem;">
+      Leave fields empty to keep your current password.
+    </p>
+
+    <form method="post" action="/admin/profile" class="stack">
+      <label>
+        <span style="display: block; margin-bottom: 0.35rem; color: #e2e8f0; font-weight: 500;">Current Password</span>
+        <input
+          type="password"
+          name="current_password"
+          style="width: 100%; padding: 0.65rem 0.75rem; border-radius: 0.75rem; border: 1px solid rgba(148,163,184,0.3); background: rgba(15,23,42,0.6); color: inherit;">
+      </label>
+
+      <label>
+        <span style="display: block; margin-bottom: 0.35rem; color: #e2e8f0; font-weight: 500;">New Password</span>
+        <input
+          type="password"
+          name="new_password"
+          style="width: 100%; padding: 0.65rem 0.75rem; border-radius: 0.75rem; border: 1px solid rgba(148,163,184,0.3); background: rgba(15,23,42,0.6); color: inherit;">
+      </label>
+
+      <label>
+        <span style="display: block; margin-bottom: 0.35rem; color: #e2e8f0; font-weight: 500;">Confirm New Password</span>
+        <input
+          type="password"
+          name="confirm_password"
+          style="width: 100%; padding: 0.65rem 0.75rem; border-radius: 0.75rem; border: 1px solid rgba(148,163,184,0.3); background: rgba(15,23,42,0.6); color: inherit;">
+      </label>
+
+      <button class="btn" type="submit" name="action" value="change_password">Change Password</button>
+    </form>
+  </section>
+{% endblock %}

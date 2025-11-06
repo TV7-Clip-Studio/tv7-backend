@@ -53,14 +53,26 @@ These tables represent the single source of truth for processing state. Backgrou
 The pipeline must execute outside the request/response loop (Celery/RQ/Dramatiq/background tasks). Failures should set the relevant status to `error` and surface diagnostic information for operators.
 
 ## API Surface
-- `POST /videos/ingest` — queue processing for a YouTube URL. Returns `{ "video_id": ..., "status": "queued" }`.
-- `GET /status/{video_id}` — poll overall video status plus per-clip progress snapshots.
-- `GET /videos/{video_id}/clips` — list generated clips with timing, caption text, preview URLs/paths, and status.
-- `POST /clips/{clip_id}/publish` — create `PublishJob` records and trigger (stubbed) publishing automation.
-- `POST /videos/ingest` — accept a YouTube URL, persist the `Video` row (`status=ingested`), and enqueue the background pipeline.
+
+### JSON API Endpoints
+- `POST /api/v1/videos/ingest` — queue processing for a YouTube URL. Returns `{ "video_id": ..., "status": "queued" }`.
+- `GET /api/v1/status/{video_id}` — poll overall video status plus per-clip progress snapshots.
+- `GET /api/v1/videos/{video_id}/clips` — list generated clips with timing, caption text, preview URLs/paths, and status.
+- `POST /api/v1/clips/{clip_id}/publish` — create `PublishJob` records and trigger (stubbed) publishing automation.
+- `GET /api/v1/users/me` — retrieve the authenticated user's profile (full name, email, account status, timestamps).
+- `PATCH /api/v1/users/me` — update the authenticated user's profile (full name, email, password). Validates email uniqueness and requires current password for password changes.
+
+### Admin Dashboard Routes
+- `GET /admin/login` — HTML login form; redirects to dashboard if already authenticated.
+- `POST /admin/login` — authenticate via email/password, set JWT session cookie, redirect to dashboard.
+- `POST /admin/logout` — clear session cookie and redirect to login.
 - `GET /admin/videos` — HTML dashboard of videos, statuses, and navigation to detail view.
 - `GET /admin/videos/{video_id}` — HTML per-video view showing clip previews, metadata, and publish buttons hooked to the publish endpoint.
-- All admin-prefixed routes require HTTP Basic auth; credentials are supplied via `ADMIN_USERNAME`/`ADMIN_PASSWORD` environment variables.
+- `POST /admin/videos/ingest` — accept a YouTube URL from the dashboard form, persist the `Video` row, and enqueue the background pipeline.
+- `GET /admin/profile` — HTML profile page displaying user information (name, email, account age) and forms for updating profile or changing password.
+- `POST /admin/profile` — handle profile updates and password changes with validation, flash success/error messages.
+
+All admin-prefixed routes require JWT cookie authentication; credentials are established via the login flow. API endpoints require bearer token authentication via the `Authorization` header.
 
 All endpoints remain within the FastAPI application. Swagger `/docs` should describe request/response contracts for the JSON APIs; admin routes can remain simple HTML templates for internal use.
 

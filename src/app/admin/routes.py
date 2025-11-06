@@ -14,11 +14,17 @@ from app.db.models import User
 from app.deps.db import get_user_repository, get_video_repository
 from app.repositories.users import UserRepository
 from app.repositories.videos import VideoRepository
+from app.schemas import UserUpdate
 from app.services.auth import (
     InvalidCredentialsError,
     authenticate_user,
     issue_tokens_for_user,
     resolve_user_from_token,
+)
+from app.services.users import (
+    EmailAlreadyTakenError,
+    InvalidPasswordError,
+    update_user_profile,
 )
 from app.services.videos import InvalidYouTubeURL, get_video_detail, ingest_video, list_videos
 
@@ -199,4 +205,83 @@ async def delete_video(
     return RedirectResponse(
         url="/admin/videos?flash=Video deleted successfully",
         status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@router.get("/profile", response_class=HTMLResponse)
+async def profile_page(
+    request: Request,
+    user_repo: UserRepository = Depends(get_user_repository),
+) -> Response:
+    user = await _current_admin_user(request, user_repo)
+    if not user:
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    flash = request.query_params.get("flash")
+    context = {
+        "request": request,
+        "user": user,
+        "flash": flash,
+    }
+    return templates.TemplateResponse(request, "admin/profile.html", context)
+
+
+@router.post("/profile")
+async def profile_update(
+    request: Request,
+    action: str = Form(...),
+    full_name: str = Form(None),
+    email: str = Form(None),
+    current_password: str = Form(None),
+    new_password: str = Form(None),
+    confirm_password: str = Form(None),
+    user_repo: UserRepository = Depends(get_user_repository),
+) -> Response:
+    user = await _current_admin_user(request, user_repo)
+    if not user:
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    error_message: str | None = None
+
+    try:
+        if action == "update_profile":
+            # Update profile information
+            updates = UserUpdate(full_name=full_name, email=email)
+            await update_user_profile(user.id, updates, user_repo)
+            return RedirectResponse(
+                url="/admin/profile?flash=Profile updated successfully",
+                status_code=status.HTTP_303_SEE_OTHER,
+            )
+
+        elif action == "change_password":
+            # Validate password change
+            if not current_password or not new_password:
+                error_message = "Current password and new password are required"
+            elif new_password != confirm_password:
+                error_message = "New passwords do not match"
+            else:
+                updates = UserUpdate(
+                    current_password=current_password, new_password=new_password
+                )
+                await update_user_profile(user.id, updates, user_repo)
+                return RedirectResponse(
+                    url="/admin/profile?flash=Password changed successfully",
+                    status_code=status.HTTP_303_SEE_OTHER,
+                )
+
+    except InvalidPasswordError:
+        error_message = "Current password is incorrect"
+    except EmailAlreadyTakenError:
+        error_message = "Email address is already in use"
+    except Exception as exc:
+        error_message = f"An error occurred: {str(exc)}"
+
+    # If there was an error, re-render the form
+    context = {
+        "request": request,
+        "user": user,
+        "error": error_message,
+    }
+    return templates.TemplateResponse(
+        request, "admin/profile.html", context, status_code=status.HTTP_400_BAD_REQUEST
     )

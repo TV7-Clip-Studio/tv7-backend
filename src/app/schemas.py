@@ -29,6 +29,13 @@ class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UserUpdate(BaseModel):
+    full_name: str | None = None
+    email: EmailStr | None = None
+    current_password: str | None = None
+    new_password: str | None = None
+
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str

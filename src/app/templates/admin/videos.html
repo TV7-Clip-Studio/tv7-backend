@@ -1,12 +1,13 @@
 {% extends "admin/base.html" %}
 
-{% block title %}Dashboard · Shorts Factory{% endblock %}
+{% block title %}Dashboard · TV7{% endblock %}
 
 {% block header %}
   <span style="display:block; font-size: 0.85rem; color: #94a3b8;">Welcome back, {{ user.full_name or user.email }}</span>
 {% endblock %}
 
 {% block header_actions %}
+  <a href="/admin/profile" class="btn btn-secondary" style="text-decoration: none;">Profile</a>
   <form class="inline" method="post" action="/admin/logout">
     <button class="btn btn-secondary" type="submit">Sign out</button>
   </form>

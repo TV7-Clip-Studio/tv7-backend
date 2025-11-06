@@ -31,3 +31,14 @@ class UserRepository:
         await self._session.flush()
         await self._session.refresh(user)
         return user
+
+    async def get_by_id(self, user_id: int) -> User | None:
+        """Fetch a user by their primary key."""
+        user: User | None = await self._session.get(User, user_id)
+        return user
+
+    async def update(self, user: User) -> User:
+        """Persist changes to a user entity and refresh it."""
+        await self._session.flush()
+        await self._session.refresh(user)
+        return user
