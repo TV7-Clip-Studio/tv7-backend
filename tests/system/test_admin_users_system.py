@@ -1,10 +1,9 @@
 """System tests for admin user management pages."""
+
 from __future__ import annotations
 
 import pytest
 from httpx import AsyncClient
-
-from app.admin.routes import SESSION_COOKIE_NAME
 
 
 @pytest.mark.system
