@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.metadata as importlib_metadata
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -63,6 +64,12 @@ app.include_router(api_router, prefix="/api/v1")
 app.include_router(admin_router)
 
 # Static files for media (videos, clips)
+# Ensure media directory exists before mounting
+media_dir = Path(settings.MEDIA_STORAGE_DIR)
+media_dir.mkdir(parents=True, exist_ok=True)
+(media_dir / "videos").mkdir(exist_ok=True)
+(media_dir / "clips").mkdir(exist_ok=True)
+
 app.mount("/media", StaticFiles(directory=settings.MEDIA_STORAGE_DIR), name="media")
 
 
