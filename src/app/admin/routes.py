@@ -180,3 +180,23 @@ async def ingest_from_dashboard(
         url="/admin/videos?flash=Video queued for processing",
         status_code=status.HTTP_303_SEE_OTHER,
     )
+
+
+@router.post("/videos/{video_id}/delete")
+async def delete_video(
+    request: Request,
+    video_id: int,
+    video_repo: VideoRepository = Depends(get_video_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+) -> Response:
+    user = await _current_admin_user(request, user_repo)
+    if not user:
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    # Delete the video record (this will cascade delete clips due to foreign key)
+    await video_repo.delete(video_id)
+
+    return RedirectResponse(
+        url="/admin/videos?flash=Video deleted successfully",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )

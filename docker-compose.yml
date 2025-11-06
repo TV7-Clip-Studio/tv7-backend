@@ -11,6 +11,8 @@ services:
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on: [postgres, redis]
+    volumes:
+      - ./media:/app/media
 
   postgres:
     image: postgres:16
@@ -37,6 +39,8 @@ services:
       PYTHONPATH: src
     command: python -m scripts.run_worker
     depends_on: [postgres, redis]
+    volumes:
+      - ./media:/app/media
 
 volumes:
   pgdata:

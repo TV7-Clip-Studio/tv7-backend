@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Run migrations (only the API service will actually need this, but it's safe to run multiple times)
 alembic upgrade head || true
 
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+# Execute whatever command was passed (from docker-compose command)
+exec "$@"
