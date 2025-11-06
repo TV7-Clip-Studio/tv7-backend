@@ -166,7 +166,7 @@ run_local() {
   fi
 
   export PASSWORD
-  python - <<'PY'
+  python - <<PY
 $PYTHON_SNIPPET
 PY
 }

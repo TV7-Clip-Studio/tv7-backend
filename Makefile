@@ -9,9 +9,45 @@ MYPY := $(VENV)/bin/mypy
 BANDIT := $(VENV)/bin/bandit
 ALEMBIC := $(VENV)/bin/alembic
 COMPOSE ?= docker compose
+
+API_PORT_FILE := $(strip $(shell awk -F= '$$1=="API_PORT"{print $$2}' .env 2>/dev/null))
+POSTGRES_PORT_FILE := $(strip $(shell awk -F= '$$1=="POSTGRES_PORT"{print $$2}' .env 2>/dev/null))
+REDIS_PORT_FILE := $(strip $(shell awk -F= '$$1=="REDIS_PORT"{print $$2}' .env 2>/dev/null))
+COMPOSE_PROJECT_FILE := $(strip $(shell awk -F= '$$1=="COMPOSE_PROJECT_NAME"{print $$2}' .env 2>/dev/null))
+
+ifeq ($(API_PORT_FILE),)
 API_PORT ?= 8000
+else
+API_PORT ?= $(API_PORT_FILE)
+endif
+
+ifeq ($(POSTGRES_PORT_FILE),)
+POSTGRES_PORT ?= 5432
+else
+POSTGRES_PORT ?= $(POSTGRES_PORT_FILE)
+endif
+
+ifeq ($(REDIS_PORT_FILE),)
+REDIS_PORT ?= 6379
+else
+REDIS_PORT ?= $(REDIS_PORT_FILE)
+endif
+
+ifeq ($(COMPOSE_PROJECT_FILE),)
+COMPOSE_PROJECT_NAME ?= $(notdir $(CURDIR))
+else
+COMPOSE_PROJECT_NAME ?= $(COMPOSE_PROJECT_FILE)
+endif
+
 FLY_APP ?= forgotten-app
 FLY_DOMAIN ?= $(FLY_APP).fly.dev
+DETACH ?= 0
+
+UP_FLAGS := --build
+ifeq ($(filter 1 true yes,$(DETACH)),)
+else
+UP_FLAGS += -d
+endif
 
 .PHONY: deps run test testcov fmt lint type sec precommit \
         revision upgrade downgrade migrate up down logs dev smoke \
@@ -64,16 +100,16 @@ downgrade:
 migrate: upgrade
 
 up:
-	API_PORT=$(API_PORT) $(COMPOSE) up --build -d
+	COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT_NAME) API_PORT=$(API_PORT) POSTGRES_PORT=$(POSTGRES_PORT) REDIS_PORT=$(REDIS_PORT) $(COMPOSE) up $(UP_FLAGS)
 
 down:
-	$(COMPOSE) down
+	COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT_NAME) $(COMPOSE) down
 
 logs:
-	$(COMPOSE) logs -f --tail=200 api postgres
+	COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT_NAME) $(COMPOSE) logs -f --tail=200 api postgres
 
 dev:
-	$(COMPOSE) up -d postgres
+	COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT_NAME) $(COMPOSE) up -d postgres
 	$(UV) app.main:app --host 0.0.0.0 --port 8000 --reload
 
 smoke:

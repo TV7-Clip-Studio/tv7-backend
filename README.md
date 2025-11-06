@@ -1,23 +1,53 @@
-# TV7 — YouTube to Shorts Pipeline
 
-Fixes included:
-- Pydantic lists via JSON arrays in `.env`.
-- `email-validator` included via `pydantic[email]`.
-- Alembic uses psycopg v3 sync driver; guarded logging config.
-- SQLAlchemy engine casts URL to `str()`.
-- Prometheus instrumentator added outside lifespan.
-- Docker Compose without `version`, and configurable port `${API_PORT:-8000}`.
-- Makefile targets: `dev` (hybrid), `up`/`down`, `smoke`, `smoke-fly`.
+## Quickstart (Docker-first)
 
-## Quickstart (local app + Docker Postgres)
+```bash
+cp .env.example .env
+make up             # runs docker compose up --build in the foreground
+```
+
+`make up` launches the API, worker, Postgres, and Redis services and follows the logs so you can watch the pipeline in real time. To stop everything, press `Ctrl+C` or run `make down`.
+
+### Running multiple local instances
+
+Compose projects are isolated by name and host ports. Override them per instance:
+
+```bash
+COMPOSE_PROJECT_NAME=tv7a \
+  API_PORT=8010 \
+  POSTGRES_PORT=5440 \
+  REDIS_PORT=6380 \
+  make up
+```
+
+Create admin user:
+```bash
+COMPOSE_PROJECT_NAME=tv7a docker compose exec api bash -lc "./scripts/create_admin_user.sh --email joaquinastelarra@gmail.com --full-name 'Operator'"
+```
+
+
+Launch a second copy from another checkout (or the same one) with different values to avoid port collisions. Each project gets its own container and volume namespace (`<project>_pgdata`), so data stays separate. Repeat the pattern for as many instances as you need, locally or on remote hosts.
+
+Add the overrides to your `.env` (or a copy per checkout) so `make up` uses them automatically:
+
+```
+# Docker-only: keep these out of Fly secrets
+COMPOSE_PROJECT_NAME=tv7a
+API_PORT=8010
+POSTGRES_PORT=5440
+REDIS_PORT=6380
+```
+
+Replace the values per instance. These variables only affect local Docker Compose port bindings; they are not required in hosted environments such as Fly.
+
+### Alternative: direct uvicorn
+
+If you prefer to run without Docker (e.g., quick unit testing), you can still bootstrap a virtualenv and start Uvicorn manually:
+
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-cp .env.example .env
-docker compose up -d postgres
-alembic revision --autogenerate -m "init"
-alembic upgrade head
-uvicorn app.main:app --reload
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --app-dir src
 ```
 
 ## Environment
@@ -28,6 +58,11 @@ uvicorn app.main:app --reload
   - `REDIS_URL` (default `redis://localhost:6379/0` locally; `redis://redis:6379/0` in Docker).
   - `DRAMATIQ_BROKER` (`stub` for tests/standalone dev, `redis` when the queue is available).
   - `WORKER_CONCURRENCY` controls the worker pool size.
+- Host-port overrides for Docker Compose instances:
+  - `API_PORT` (defaults to `8000`).
+  - `POSTGRES_PORT` (defaults to `5432`).
+  - `REDIS_PORT` (defaults to `6379`).
+  Set them per shell invocation to run multiple stacks side-by-side.
 - JWT auth settings:
   - `JWT_SECRET` and `JWT_ALGORITHM` sign API tokens (default `HS256`).
   - `JWT_ACCESS_TOKEN_EXPIRES_MINUTES` / `JWT_REFRESH_TOKEN_EXPIRES_MINUTES` control expiry windows.
