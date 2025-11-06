@@ -20,6 +20,16 @@ from app.services.auth import (
     issue_tokens_for_user,
     resolve_user_from_token,
 )
+from app.services.users import (
+    CannotDeleteCurrentUserError,
+    UserNotFoundError,
+    delete_user,
+    list_users,
+    update_user_status,
+)
+from app.services.users import (
+    get_user_detail as get_user_detail_service,
+)
 from app.services.videos import InvalidYouTubeURL, get_video_detail, ingest_video, list_videos
 
 SESSION_COOKIE_NAME = "admin_session"
@@ -200,3 +210,96 @@ async def delete_video(
         url="/admin/videos?flash=Video deleted successfully",
         status_code=status.HTTP_303_SEE_OTHER,
     )
+
+
+@router.get("/users", response_class=HTMLResponse)
+async def users_dashboard(
+    request: Request,
+    user_repo: UserRepository = Depends(get_user_repository),
+) -> Response:
+    user = await _current_admin_user(request, user_repo)
+    if not user:
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    users = await list_users(user_repo)
+    flash = request.query_params.get("flash")
+    context = {
+        "request": request,
+        "user": user,
+        "users": users,
+        "flash": flash,
+    }
+    return templates.TemplateResponse(request, "admin/users.html", context)
+
+
+@router.get("/users/{user_id}", response_class=HTMLResponse)
+async def user_detail_page(
+    request: Request,
+    user_id: int,
+    user_repo: UserRepository = Depends(get_user_repository),
+) -> Response:
+    current_user = await _current_admin_user(request, user_repo)
+    if not current_user:
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    try:
+        detail_user = await get_user_detail_service(user_repo, user_id)
+    except UserNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found") from exc
+
+    context = {
+        "request": request,
+        "user": current_user,
+        "detail_user": detail_user,
+        "is_current_user": current_user.id == detail_user.id,
+    }
+    return templates.TemplateResponse(request, "admin/user_detail.html", context)
+
+
+@router.post("/users/{user_id}/toggle-status")
+async def toggle_user_status(
+    request: Request,
+    user_id: int,
+    user_repo: UserRepository = Depends(get_user_repository),
+) -> Response:
+    user = await _current_admin_user(request, user_repo)
+    if not user:
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    try:
+        detail_user = await get_user_detail_service(user_repo, user_id)
+        # Toggle the status
+        new_status = not detail_user.is_active
+        await update_user_status(user_id, new_status, user_repo)
+        status_text = "activated" if new_status else "deactivated"
+        return RedirectResponse(
+            url=f"/admin/users/{user_id}?flash=User {status_text} successfully",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+    except UserNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found") from exc
+
+
+@router.post("/users/{user_id}/delete")
+async def delete_user_endpoint(
+    request: Request,
+    user_id: int,
+    user_repo: UserRepository = Depends(get_user_repository),
+) -> Response:
+    current_user = await _current_admin_user(request, user_repo)
+    if not current_user:
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    try:
+        await delete_user(user_id, user_repo, current_user_id=current_user.id)
+        return RedirectResponse(
+            url="/admin/users?flash=User deleted successfully",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+    except CannotDeleteCurrentUserError as exc:
+        return RedirectResponse(
+            url=f"/admin/users/{user_id}?error={str(exc)}",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+    except UserNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found") from exc

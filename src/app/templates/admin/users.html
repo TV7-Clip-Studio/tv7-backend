@@ -1,0 +1,68 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Users · TV7 Admin{% endblock %}
+
+{% block header %}
+  <span style="display:block; font-size: 0.85rem; color: #94a3b8;">User Management</span>
+{% endblock %}
+
+{% block header_actions %}
+  <form class="inline" method="post" action="/admin/logout">
+    <button class="btn btn-secondary" type="submit">Sign out</button>
+  </form>
+{% endblock %}
+
+{% block content %}
+  <section style="margin-bottom: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <h1 style="margin: 0;">Users</h1>
+    </div>
+
+    {% if flash %}
+      <div class="flash" style="margin-bottom: 1rem;">{{ flash }}</div>
+    {% endif %}
+    {% if error %}
+      <div class="flash error" style="margin-bottom: 1rem;">{{ error }}</div>
+    {% endif %}
+  </section>
+
+  <section class="stack">
+    {% if users %}
+      <div class="grid">
+        {% for u in users %}
+          <article class="card stack">
+            <div style="display:flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
+              <div style="flex: 1; min-width: 0;">
+                <h3 style="margin: 0 0 0.5rem;">
+                  <a href="/admin/users/{{ u.id }}" style="text-decoration: none; color: inherit;">
+                    {{ u.full_name }}
+                  </a>
+                </h3>
+                <div style="font-size: 0.9rem; color: #94a3b8; word-break: break-all;">
+                  {{ u.email }}
+                </div>
+              </div>
+              <span class="status {% if u.is_active %}status--ready{% else %}status--error{% endif %}">
+                {% if u.is_active %}Active{% else %}Inactive{% endif %}
+              </span>
+            </div>
+
+            <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 0.5rem;">
+              <div>ID: {{ u.id }}</div>
+              <div>Created: {{ u.created_at.strftime('%Y-%m-%d %H:%M') if u.created_at else '—' }}</div>
+              <div>Updated: {{ u.updated_at.strftime('%Y-%m-%d %H:%M') if u.updated_at else '—' }}</div>
+            </div>
+
+            <a href="/admin/users/{{ u.id }}" style="display: inline-block; margin-top: 0.75rem; font-size: 0.9rem;">
+              View details →
+            </a>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="card">
+        <p style="color: #94a3b8; margin: 0;">No users found.</p>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}
