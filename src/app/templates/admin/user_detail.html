@@ -1,0 +1,132 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ detail_user.full_name }} · User Detail{% endblock %}
+
+{% block header %}
+  <div>
+    <a href="/admin/users" style="font-size: 0.85rem; color: #94a3b8; text-decoration: none;">← Back to Users</a>
+  </div>
+{% endblock %}
+
+{% block header_actions %}
+  <form class="inline" method="post" action="/admin/logout">
+    <button class="btn btn-secondary" type="submit">Sign out</button>
+  </form>
+{% endblock %}
+
+{% block content %}
+  <section style="margin-bottom: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <h1 style="margin: 0;">{{ detail_user.full_name }}</h1>
+      <span class="status {% if detail_user.is_active %}status--ready{% else %}status--error{% endif %}">
+        {% if detail_user.is_active %}Active{% else %}Inactive{% endif %}
+      </span>
+    </div>
+
+    {% if flash %}
+      <div class="flash" style="margin-bottom: 1rem;">{{ flash }}</div>
+    {% endif %}
+    {% if error %}
+      <div class="flash error" style="margin-bottom: 1rem;">{{ error }}</div>
+    {% endif %}
+  </section>
+
+  <div class="grid two" style="margin-bottom: 2rem;">
+    <section class="card stack">
+      <h2 style="margin: 0 0 1rem;">User Information</h2>
+
+      <div class="stack" style="gap: 0.75rem;">
+        <div>
+          <div style="font-size: 0.8rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;">
+            User ID
+          </div>
+          <div style="font-size: 1rem;">{{ detail_user.id }}</div>
+        </div>
+
+        <div>
+          <div style="font-size: 0.8rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;">
+            Email Address
+          </div>
+          <div style="font-size: 1rem; word-break: break-all;">
+            <a href="mailto:{{ detail_user.email }}">{{ detail_user.email }}</a>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size: 0.8rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;">
+            Full Name
+          </div>
+          <div style="font-size: 1rem;">{{ detail_user.full_name }}</div>
+        </div>
+
+        <div>
+          <div style="font-size: 0.8rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;">
+            Account Status
+          </div>
+          <div style="font-size: 1rem;">
+            {% if detail_user.is_active %}
+              <span style="color: #4ade80;">✓ Active</span>
+            {% else %}
+              <span style="color: #fca5a5;">✗ Inactive</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card stack">
+      <h2 style="margin: 0 0 1rem;">Account Metadata</h2>
+
+      <div class="stack" style="gap: 0.75rem;">
+        <div>
+          <div style="font-size: 0.8rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;">
+            Created At
+          </div>
+          <div style="font-size: 1rem;">
+            {{ detail_user.created_at.strftime('%Y-%m-%d %H:%M:%S') if detail_user.created_at else '—' }}
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size: 0.8rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;">
+            Last Updated
+          </div>
+          <div style="font-size: 1rem;">
+            {{ detail_user.updated_at.strftime('%Y-%m-%d %H:%M:%S') if detail_user.updated_at else '—' }}
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </div>
+
+  <section class="card stack">
+    <h2 style="margin: 0 0 1rem;">Actions</h2>
+
+    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+      {% if not is_current_user %}
+        <form method="post" action="/admin/users/{{ detail_user.id }}/toggle-status" class="inline">
+          <button class="btn" type="submit">
+            {% if detail_user.is_active %}
+              Deactivate Account
+            {% else %}
+              Activate Account
+            {% endif %}
+          </button>
+        </form>
+
+        <form method="post" action="/admin/users/{{ detail_user.id }}/delete"
+              class="inline"
+              onsubmit="return confirm('Are you sure you want to delete this user? This action cannot be undone.')">
+          <button class="btn btn-secondary" type="submit" style="color: #fca5a5; border-color: rgba(239, 68, 68, 0.4);">
+            Delete User
+          </button>
+        </form>
+      {% else %}
+        <div style="padding: 0.75rem; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 0.75rem; color: #93c5fd; font-size: 0.9rem;">
+          ℹ️ You cannot modify or delete your own account
+        </div>
+      {% endif %}
+    </div>
+  </section>
+{% endblock %}

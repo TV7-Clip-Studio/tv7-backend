@@ -31,3 +31,18 @@ class UserRepository:
         await self._session.flush()
         await self._session.refresh(user)
         return user
+
+    async def get_by_id(self, user_id: int) -> User | None:
+        result = await self._session.execute(select(User).where(User.id == user_id))
+        user: User | None = result.scalar_one_or_none()
+        return user
+
+    async def update(self, user: User) -> User:
+        await self._session.flush()
+        await self._session.refresh(user)
+        return user
+
+    async def delete(self, user_id: int) -> None:
+        user = await self.get_by_id(user_id)
+        if user:
+            await self._session.delete(user)
