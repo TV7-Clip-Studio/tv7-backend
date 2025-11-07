@@ -10,13 +10,15 @@ This guide keeps autonomous or semi-autonomous contributors aligned while evolvi
 I'm working on the TV7 project, a FastAPI service that converts YouTube videos into short-form vertical clips.
 
 First, I'll read the documentation in this order:
+0. docs/agent_best_practices.md - This file, for coding standards and workflow
 1. docs/INDEX.md - Navigation hub to understand the documentation structure
 2. docs/architecture.md - System design, domain model, and API layering
 3. docs/tech_stack.md - Technologies, libraries, and dependencies
 4. docs/roadmap.md - Current feature plan and completion status
 5. docs/user_flows.md - How operators and API clients use the system
 6. docs/testing.md - Test strategy and where to place new tests
-7. docs/agent_best_practices.md - This file, for coding standards and workflow
+7. docs/* - any other doc
+
 
 I understand that:
 - This is a monolithic FastAPI application (API + workers + admin UI)
@@ -62,6 +64,38 @@ I will follow the established patterns in the codebase and ask for clarification
    - `README.md` - Setup or deployment impacts
    - Update `docs/INDEX.md` if adding new documentation files
 
+## Git Workflow & Agent Responsibilities
+
+**IMPORTANT: Agents do NOT commit code. Git operations remain human responsibility.**
+
+**What agents CAN do:**
+- ✅ Read files, write files, edit files, execute files.
+- ✅ Run `make fmt`, `make lint`, `make type`, `make testcov`
+- ✅ Check `git status` and `git diff`
+- ✅ Provide PR title and description
+- ✅ other checks and console runs.
+
+**What agents CANNOT do:**
+- ❌ `git commit` - Humans review and commit
+- ❌ `git push` - Humans push to remote
+- ❌ `git merge` / `git rebase` - Humans handle git history
+- ❌ `git checkout` / `git branch` - Humans manage branches
+- ❌ Stage changes with `git add <files>`
+
+**Agent workflow:**
+1. Make code changes (write/edit files)
+2. Run quality checks (`make fmt`, `make lint`, `make type`)
+3. Run tests (`make testcov`)
+4. Stage changes (`git add <files>`)
+5. Provide PR description to human
+6. Human reviews, commits, and pushes
+
+**Why this separation?**
+- Humans maintain final control over git history
+- Commit messages require human judgment and context
+- Git operations can have side effects agents shouldn't handle
+- Humans can review staged changes before committing
+
 ## Coding Standards
 - **FastAPI conventions:** Use Pydantic models for input/output. Add descriptive tags and summaries so `/docs` stays polished.
 - **SQLAlchemy + Alembic:** Stick to SQLAlchemy 2.0 async patterns. Generate and commit migrations alongside model changes.
@@ -104,12 +138,21 @@ I will follow the established patterns in the codebase and ask for clarification
 - Document rollback procedures if critical
 
 ## Quick Checklist
+
+**For agents (before handing off to human):**
 - [ ] Implementation plan captured.
 - [ ] Code follows FastAPI + service module patterns.
 - [ ] Auth/rate limits/admin guardrails applied.
 - [ ] Background work is non-blocking and idempotent.
 - [ ] Metrics/logs/tests updated; `make testcov` passes.
 - [ ] Docs and runbooks refreshed (check INDEX.md for what needs updating).
-- [ ] Risks and follow-ups documented for operators.
 - [ ] New dependencies added to `tech_stack.md`.
 - [ ] User-facing changes reflected in `user_flows.md`.
+- [ ] PR title and description provided to human.
+
+**For humans (commit and push):**
+- [ ] Review staged changes (`git diff --staged`).
+- [ ] Verify tests pass locally.
+- [ ] Commit with descriptive message.
+- [ ] Push to remote and create PR.
+- [ ] Link PR to relevant issues/roadmap items.
