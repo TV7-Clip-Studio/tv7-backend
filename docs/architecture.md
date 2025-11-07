@@ -67,7 +67,8 @@ All endpoints remain within the FastAPI application. Swagger `/docs` should desc
 ## Operational Notes
 - **Storage:** Local disk works for development; abstract via settings so object storage (S3, GCS) can be introduced later.
 - **Background Execution:** Use a task queue (e.g., Dramatiq, RQ, Celery) or FastAPI `BackgroundTasks` wrapper that delegates to worker processes. Never block the ingest request on downloading or rendering.
-- **Queue Implementation:** The current build uses Dramatiq with Redis. The API enqueues actors that run in a separate worker process (`scripts/run_worker.py`). Redis connection strings live in settings and can be swapped for a stub broker during testing.
+- **Queue Implementation:** The current build uses Dramatiq with Redis. The API enqueues actors that run in a separate worker process (`scripts/run_worker.py`) which now stays alive until it receives SIGINT/SIGTERM. Make sure `DRAMATIQ_BROKER=redis` is configured and keep one worker process running (`make worker` locally, Fly `worker` group) so pipeline jobs are consumed. Redis connection strings live in settings and can be swapped for a stub broker during testing.
+- **Inline dev mode:** When `DRAMATIQ_BROKER=stub`, the API executes the entire pipeline inline after ingest. This makes local/UI smoke tests deterministic—videos march from `ingested` → `processing` → `ready` without a worker—but should never be used in production.
 - **Observability:** Record timestamps and durations per pipeline stage; expose them via logs and metrics to surface bottlenecks (download time, LLM latency, ffmpeg performance).
 - **Admin credentials:** Rotate the HTTP Basic credentials via `make admin-credentials` (writes to `.env`, syncs Fly secrets, and prints the values) before deploying.
 - **Extensibility:** Additional services (thumbnail generation, branded overlays, true publisher integrations) should build atop these core models without splitting the codebase.

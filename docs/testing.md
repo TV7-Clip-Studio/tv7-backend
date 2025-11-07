@@ -9,8 +9,14 @@ This project keeps separate test layers so contributors can run quick feedback l
 | Unit / API | `tests/` | milliseconds–seconds | Pure functions, API routers with dependency overrides, schema serialization, error handling. |
 | System | `tests/system/` | seconds | In-process FastAPI app running with real dependency wiring (lifespan, middleware, repositories) and stubbed external collaborators. Verifies end-to-end request/response behaviour plus database effects. |
 | Integration | `tests/integration/` | seconds–minutes | Full environment using Testcontainers Postgres (or `TEST_DATABASE_URL`) with Alembic migrations. Ensures persistence and infrastructure wiring behave like production. |
+| Regression (optional) | `tests/regression/` | seconds | End-to-end pipeline smoke tests with external services stubbed. Use for deep verification before releases (`make pipeline-smoke`). |
+| UI (optional) | `tests/ui/` | seconds | Playwright browser flows that exercise the admin dashboard against a running stack (`make ui-smoke`). |
 
 Run the whole suite locally with `make test`. Run `make test-integration` when you need the container-backed checks.
+
+To exercise the full Shorts pipeline with stubbed downloads/highlights, run `make pipeline-smoke`. These regression tests are optional and marked with `@pytest.mark.regression` so they won’t run during the default `make test`. The suite asserts that a video moves from `ingested` to `processing` to `ready`, persists transcript metadata, and creates rendering clips whenever the fake highlight detector returns segments.
+
+To validate interactive admin flows end-to-end, ensure the Docker stack (or Fly staging) is running and then execute `make ui-smoke`. This target installs the Chromium browser once and runs `tests/ui/` against `UI_BASE_URL` (defaults to `http://127.0.0.1:8000`; override as needed). The Playwright test logs into `/admin/videos`, queues a YouTube URL, and verifies the live status timeline embedded in the detail page. Run the server with `DRAMATIQ_BROKER=stub` so the inline pipeline updates the UI immediately without needing a worker.
 
 ## System Tests
 

@@ -13,6 +13,7 @@
 {% endblock %}
 
 {% block content %}
+  <div id="video-detail" data-video-id="{{ video.id }}" data-status="{{ video.status }}" data-clips="{{ video.clips|length }}">
   <nav style="margin-bottom: 1.5rem;">
     <a href="/admin/videos" style="text-decoration: none; color: #94a3b8;">← Back to videos</a>
   </nav>
@@ -22,7 +23,7 @@
       <div>
         <h1 style="margin: 0 0 0.5rem;">Video #{{ video.id }}</h1>
         {% set video_class = 'status--' + video.status %}
-        <span class="status {{ video_class }}">
+        <span id="video-status" class="status {{ video_class }}" data-status="{{ video.status }}">
           {{ video.status.replace('_', ' ') | title }}
         </span>
       </div>
@@ -31,6 +32,29 @@
           Delete Video
         </button>
       </form>
+    </div>
+
+    <div class="timeline" id="video-timeline" data-timeline data-current-status="{{ video.status }}">
+      <div class="timeline__step" data-step="ingested">
+        <span class="timeline__label">Queued</span>
+        <span class="timeline__status">Waiting for worker</span>
+        <small style="color:#94a3b8;">Request received and stored.</small>
+      </div>
+      <div class="timeline__step" data-step="processing">
+        <span class="timeline__label">Processing</span>
+        <span class="timeline__status">Downloading & detecting highlights</span>
+        <small style="color:#94a3b8;">We download the video and ask the LLM for clips.</small>
+      </div>
+      <div class="timeline__step" data-step="ready">
+        <span class="timeline__label">Clips ready</span>
+        <span class="timeline__status">Assets available</span>
+        <small style="color:#94a3b8;">Final clips appear below with previews.</small>
+      </div>
+      <div class="timeline__step" data-step="error">
+        <span class="timeline__label">Issue detected</span>
+        <span class="timeline__status">Action required</span>
+        <small style="color:#fca5a5;">See error message above for details.</small>
+      </div>
     </div>
 
     <div style="margin-top: 1rem;">
@@ -43,21 +67,30 @@
       <p style="margin: 0.25rem 0; color: #94a3b8; font-size: 0.9rem;">
         <strong>Updated:</strong> {{ video.updated_at.strftime('%Y-%m-%d %H:%M') if video.updated_at else '—' }}
       </p>
-      {% if video.duration_seconds %}
-        <p style="margin: 0.25rem 0; color: #94a3b8; font-size: 0.9rem;">
-          <strong>Duration:</strong> {{ video.duration_seconds }}s ({{ "%.1f"|format(video.duration_seconds / 60) }} min)
-        </p>
-      {% endif %}
-      {% if video.file_size_bytes %}
-        <p style="margin: 0.25rem 0; color: #94a3b8; font-size: 0.9rem;">
-          <strong>File Size:</strong> {{ "%.2f"|format(video.file_size_bytes / 1024 / 1024) }} MB
-        </p>
-      {% endif %}
+      <p style="margin: 0.25rem 0; color: #94a3b8; font-size: 0.9rem;">
+        <strong>Transcript language:</strong> {{ video.transcript_language or '—' }}
+      </p>
+      <p id="video-duration" style="margin: 0.25rem 0; color: #94a3b8; font-size: 0.9rem;{% if not video.duration_seconds %} display:none;{% endif %}">
+        <strong>Duration:</strong>
+        {% if video.duration_seconds %}
+          {{ video.duration_seconds }}s ({{ "%.1f"|format(video.duration_seconds / 60) }} min)
+        {% else %}
+          —
+        {% endif %}
+      </p>
+      <p id="video-filesize" style="margin: 0.25rem 0; color: #94a3b8; font-size: 0.9rem;{% if not video.file_size_bytes %} display:none;{% endif %}">
+        <strong>File Size:</strong>
+        {% if video.file_size_bytes %}
+          {{ "%.2f"|format(video.file_size_bytes / 1024 / 1024) }} MB
+        {% else %}
+          —
+        {% endif %}
+      </p>
     </div>
 
     {# Source Video Player #}
     {% if video.local_path %}
-      <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(148,163,184,0.15);">
+      <div id="video-player" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(148,163,184,0.15);">
         <h3 style="margin: 0 0 1rem; font-size: 1.1rem; color: #e2e8f0;">Source Video</h3>
         <div style="background: #000; border-radius: 8px; padding: 0.5rem;">
           <video
@@ -76,19 +109,19 @@
         </p>
       </div>
     {% elif video.status == 'processing' %}
-      <div style="margin-top: 1.5rem; padding: 2rem; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3); border-radius: 8px; text-align: center;">
+      <div id="download-pending" style="margin-top: 1.5rem; padding: 2rem; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3); border-radius: 8px; text-align: center;">
         <p style="margin: 0; color: #60a5fa; font-size: 1rem;">⏳ Downloading video from YouTube...</p>
         <p style="margin: 0.5rem 0 0; color: #94a3b8; font-size: 0.85rem;">This may take 30-60 seconds depending on video length</p>
       </div>
     {% elif video.status == 'error' and video.error_message %}
-      <div style="margin-top: 1.5rem; padding: 1.5rem; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px;">
+      <div id="video-error" style="margin-top: 1.5rem; padding: 1.5rem; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px;">
         <p style="margin: 0; color: #f87171; font-size: 1rem; font-weight: 600;">❌ Download Failed</p>
         <p style="margin: 0.5rem 0 0; color: #fca5a5; font-size: 0.9rem;">{{ video.error_message }}</p>
       </div>
     {% endif %}
 
     {% if video.transcript_text %}
-      <details style="margin-top: 1.5rem;">
+      <details id="video-transcript" style="margin-top: 1.5rem;">
         <summary style="cursor: pointer; color: #60a5fa; font-weight: 600;">View transcript</summary>
         <div style="margin-top: 1rem; padding: 1rem; background: rgba(15,23,42,0.6); border-radius: 8px; max-height: 300px; overflow-y: auto;">
           <pre style="margin: 0; white-space: pre-wrap; font-size: 0.85rem; color: #cbd5e1;">{{ video.transcript_text }}</pre>
@@ -218,4 +251,143 @@
       </div>
     {% endif %}
   </section>
+  </div>
+
+  <script>
+    (function () {
+      const container = document.getElementById("video-detail");
+      if (!container) return;
+      const videoId = container.dataset.videoId;
+      let currentStatus = container.dataset.status;
+      let currentClipCount = Number(container.dataset.clips || "0");
+      const terminalStatuses = new Set(["ready", "error"]);
+      const statusEl = document.getElementById("video-status");
+      const durationEl = document.getElementById("video-duration");
+      const filesizeEl = document.getElementById("video-filesize");
+      const timelineEl = document.getElementById("video-timeline");
+      const stepOrder = ["ingested", "processing", "ready"];
+
+      function humanizeStatus(status) {
+        return status
+          .split("_")
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(" ");
+      }
+
+      function updateTimeline(status) {
+        if (!timelineEl) return;
+        timelineEl.dataset.currentStatus = status;
+        const steps = timelineEl.querySelectorAll("[data-step]");
+        const currentIndex = stepOrder.indexOf(status);
+
+        steps.forEach((step) => {
+          const stepName = step.dataset.step || "";
+          step.classList.remove(
+            "timeline__step--completed",
+            "timeline__step--current",
+            "timeline__step--pending",
+            "timeline__step--error",
+          );
+
+          if (status === "error") {
+            if (stepName === "error") {
+              step.classList.add("timeline__step--error", "timeline__step--current");
+            } else if (stepOrder.indexOf(stepName) !== -1) {
+              step.classList.add("timeline__step--completed");
+            } else {
+              step.classList.add("timeline__step--pending");
+            }
+            return;
+          }
+
+          const index = stepOrder.indexOf(stepName);
+          if (index === -1) {
+            step.classList.add("timeline__step--pending");
+            return;
+          }
+
+          if (index < currentIndex) {
+            step.classList.add("timeline__step--completed");
+          } else if (index === currentIndex) {
+            step.classList.add("timeline__step--current");
+          } else {
+            step.classList.add("timeline__step--pending");
+          }
+        });
+      }
+
+      function updateMetadata(data) {
+        if (durationEl) {
+          if (data.duration_seconds) {
+            durationEl.style.display = "";
+            durationEl.innerHTML =
+              "<strong>Duration:</strong> " +
+              data.duration_seconds +
+              "s (" +
+              (data.duration_seconds / 60).toFixed(1) +
+              " min)";
+          }
+        }
+        if (filesizeEl) {
+          if (data.file_size_bytes) {
+            filesizeEl.style.display = "";
+            filesizeEl.innerHTML =
+              "<strong>File Size:</strong> " +
+              (data.file_size_bytes / 1024 / 1024).toFixed(2) +
+              " MB";
+          }
+        }
+      }
+
+      async function poll() {
+        try {
+          const response = await fetch(`/admin/videos/${videoId}/status`, {
+            headers: { Accept: "application/json" },
+          });
+          if (!response.ok) throw new Error(`Status ${response.status}`);
+          const data = await response.json();
+
+          if (statusEl) {
+            statusEl.dataset.status = data.status;
+            statusEl.textContent = humanizeStatus(data.status);
+            statusEl.className = `status status--${data.status}`;
+          }
+
+          updateMetadata(data);
+          updateTimeline(data.status);
+
+          const clipCount = Array.isArray(data.clips) ? data.clips.length : 0;
+
+          const statusChanged = data.status !== currentStatus;
+          const clipsChanged = clipCount !== currentClipCount;
+          const hasMedia = Boolean(data.local_path);
+
+          currentStatus = data.status;
+          currentClipCount = clipCount;
+
+          if (statusChanged && terminalStatuses.has(data.status)) {
+            window.location.reload();
+            return;
+          }
+
+          if (clipsChanged || hasMedia) {
+            window.location.reload();
+            return;
+          }
+        } catch (err) {
+          console.warn("Failed to poll video status", err);
+        }
+
+        if (!terminalStatuses.has(currentStatus)) {
+          setTimeout(poll, 5000);
+        }
+      }
+
+      updateTimeline(currentStatus);
+
+      if (!terminalStatuses.has(currentStatus)) {
+        setTimeout(poll, 5000);
+      }
+    })();
+  </script>
 {% endblock %}

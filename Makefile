@@ -3,6 +3,7 @@ PY := $(VENV)/bin/python
 PIP := $(VENV)/bin/pip
 UV := $(VENV)/bin/uvicorn
 PYTEST := $(VENV)/bin/pytest
+PLAYWRIGHT := $(VENV)/bin/playwright
 BLACK := $(VENV)/bin/black
 RUFF := $(VENV)/bin/ruff
 MYPY := $(VENV)/bin/mypy
@@ -50,8 +51,8 @@ UP_FLAGS += -d
 endif
 
 .PHONY: deps run test testcov fmt lint type sec precommit \
-        revision upgrade downgrade migrate up down logs dev smoke \
-        smoke-fly \
+        revision upgrade downgrade migrate up down build restart logs dev smoke \
+        smoke-fly pipeline-smoke ui-smoke \
         admin-credentials worker \
         test-integration
 
@@ -127,3 +128,10 @@ admin-credentials: deps
 
 worker: deps
 	$(PY) scripts/run_worker.py
+
+pipeline-smoke: deps
+	$(PYTEST) --override-ini addopts= -m regression -q
+
+ui-smoke: deps
+	$(PLAYWRIGHT) install --with-deps chromium >/dev/null
+	UI_BASE_URL=$(UI_BASE_URL) $(PYTEST) --override-ini addopts= -m ui tests/ui

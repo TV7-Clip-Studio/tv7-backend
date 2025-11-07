@@ -109,6 +109,69 @@
       form.inline {
         display: inline;
       }
+      .timeline {
+        display: flex;
+        gap: 1rem;
+        margin: 1.25rem 0 0;
+        flex-wrap: wrap;
+      }
+      .timeline__step {
+        flex: 1 1 180px;
+        position: relative;
+        padding: 0.75rem 1rem;
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        background: rgba(15, 23, 42, 0.6);
+        min-width: 160px;
+      }
+      .timeline__step::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        right: -0.75rem;
+        width: 1.5rem;
+        height: 1px;
+        background: rgba(148, 163, 184, 0.3);
+      }
+      .timeline__step:last-child::after {
+        display: none;
+      }
+      .timeline__label {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #94a3b8;
+      }
+      .timeline__status {
+        font-weight: 600;
+        display: block;
+        margin-top: 0.25rem;
+        color: #e2e8f0;
+      }
+      .timeline__step--completed {
+        border-color: rgba(52, 211, 153, 0.4);
+        background: rgba(52, 211, 153, 0.12);
+      }
+      .timeline__step--completed .timeline__label {
+        color: #86efac;
+      }
+      .timeline__step--current {
+        border-color: rgba(59, 130, 246, 0.5);
+        background: rgba(59, 130, 246, 0.12);
+      }
+      .timeline__step--current .timeline__label {
+        color: #bfdbfe;
+      }
+      .timeline__step--error {
+        border-color: rgba(248, 113, 113, 0.6);
+        background: rgba(248, 113, 113, 0.12);
+      }
+      .timeline__step--error .timeline__label {
+        color: #fecaca;
+      }
+      .timeline__step--pending {
+        opacity: 0.6;
+      }
     </style>
     {% block head %}{% endblock %}
   </head>

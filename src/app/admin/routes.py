@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.core.config import settings
@@ -14,6 +14,7 @@ from app.db.models import User
 from app.deps.db import get_user_repository, get_video_repository
 from app.repositories.users import UserRepository
 from app.repositories.videos import VideoRepository
+from app.schemas import VideoRead
 from app.services.auth import (
     InvalidCredentialsError,
     authenticate_user,
@@ -155,6 +156,25 @@ async def video_detail(
         "clip_summary": entry.clips,
     }
     return templates.TemplateResponse(request, "admin/video_detail.html", context)
+
+
+@router.get("/videos/{video_id}/status")
+async def video_status_json(
+    request: Request,
+    video_id: int,
+    video_repo: VideoRepository = Depends(get_video_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+) -> JSONResponse:
+    user = await _current_admin_user(request, user_repo)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+
+    video = await video_repo.get_with_clips(video_id)
+    if not video:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found")
+
+    payload = VideoRead.model_validate(video, from_attributes=True)
+    return JSONResponse(payload.model_dump(mode="json"))
 
 
 @router.post("/videos/ingest")

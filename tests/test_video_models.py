@@ -44,5 +44,7 @@ async def test_cascade_delete(db_session: AsyncSession) -> None:
     await db_session.delete(video)
     await db_session.flush()
 
-    clip_rows = (await db_session.execute(select(Clip))).scalars().all()
+    clip_rows = (
+        (await db_session.execute(select(Clip).where(Clip.video_id == video.id))).scalars().all()
+    )
     assert clip_rows == []

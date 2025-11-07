@@ -40,6 +40,24 @@ async def _set_video_status(video_id: int, status: VideoStatus) -> None:
         await session.flush()
 
 
+async def _get_video(video_id: int) -> Video | None:
+    async with session_scope() as session:
+        video: Video | None = await session.get(Video, video_id)
+        return video
+
+
+async def _get_video_status(video_id: int) -> VideoStatus | None:
+    video = await _get_video(video_id)
+    if not video:
+        return None
+    return VideoStatus(video.status)
+
+
+async def _video_has_error(video_id: int) -> bool:
+    status = await _get_video_status(video_id)
+    return status == VideoStatus.ERROR
+
+
 @actor(max_retries=3)
 def process_video(video_id: int) -> None:
     """Entry point for the pipeline: mark video processing and kick off stages."""
@@ -65,6 +83,7 @@ async def _download_video_task(video_id: int) -> None:
             video.local_path = result.local_path
             video.file_size_bytes = result.file_size_bytes
             video.transcript_text = result.transcript_text
+            video.transcript_language = result.transcript_language
             video.duration_seconds = result.duration_seconds
             video.error_message = None  # Clear any previous errors
 
@@ -152,6 +171,7 @@ async def _detect_highlights_task(video_id: int) -> None:
                 transcript=video.transcript_text,
                 duration_seconds=video.duration_seconds,
                 video_id=video_id,
+                transcript_language=video.transcript_language,
             )
 
             # Create Clip records for each segment
@@ -219,3 +239,31 @@ def finalize_video(video_id: int) -> None:
 
     logger.info("Finalize video", extra={"video_id": video_id})
     _run_async(_set_video_status(video_id, VideoStatus.READY))
+
+
+async def run_pipeline_inline(video_id: int) -> None:
+    """
+    Execute the full pipeline sequentially inside the API process.
+
+    Used when the Dramatiq stub broker is configured, ensuring local/dev
+    environments advance Video status without a background worker.
+    """
+
+    logger.info("Running inline pipeline", extra={"video_id": video_id})
+    await _set_video_status(video_id, VideoStatus.PROCESSING)
+    await _download_video_task(video_id)
+
+    if await _video_has_error(video_id):
+        logger.warning("Inline pipeline halted after download", extra={"video_id": video_id})
+        return
+
+    await _detect_highlights_task(video_id)
+
+    if await _video_has_error(video_id):
+        logger.warning(
+            "Inline pipeline halted after highlight detection", extra={"video_id": video_id}
+        )
+        return
+
+    await _set_video_status(video_id, VideoStatus.READY)
+    logger.info("Inline pipeline completed", extra={"video_id": video_id})

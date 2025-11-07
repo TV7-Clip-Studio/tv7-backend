@@ -56,7 +56,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --app-dir src
 - Optional AgentKit integration uses `AGENTKIT_URL` and `AGENTKIT_API_KEY`.
 - Dramatiq worker settings:
   - `REDIS_URL` (default `redis://localhost:6379/0` locally; `redis://redis:6379/0` in Docker).
-  - `DRAMATIQ_BROKER` (`stub` for tests/standalone dev, `redis` when the queue is available).
+  - `DRAMATIQ_BROKER` (`stub` for tests/standalone dev, `redis` when the queue is available). When `stub` is active the entire download + highlight pipeline runs inline inside the API process, so video status transitions (`INGESTED → PROCESSING → READY`) appear immediately for admin operators without running `make worker`.
   - `WORKER_CONCURRENCY` controls the worker pool size.
 - Host-port overrides for Docker Compose instances:
   - `API_PORT` (defaults to `8000`).
@@ -164,3 +164,14 @@ We host production/staging Postgres on Neon. The full setup guide—covering poo
   You can also override the container image with `TEST_POSTGRES_IMAGE`.
 
 See `docs/testing.md` for an overview of the unit, system, and integration layers plus guidance on where to place new scenarios.
+
+- Pipeline smoke + fixtures:
+  ```bash
+  make pipeline-smoke
+  ```
+  Runs the regression suite with stubbed download/highlight services to make sure a video moves from `ingested` to `ready`, persisting transcript metadata and clips along the way.
+- Playwright UI smoke (requires the API running locally):
+  ```bash
+  make ui-smoke
+  ```
+  Logs into `/admin/videos`, queues a video, and checks the real-time status timeline on the detail page. Use `DRAMATIQ_BROKER=stub` for this run so the inline pipeline updates the UI instantly.

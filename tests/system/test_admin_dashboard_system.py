@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from unittest.mock import AsyncMock
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin.routes import SESSION_COOKIE_NAME
 from app.db.models import Clip, ClipStatus, Video, VideoStatus
+from app.services import videos as video_service
 
 
 @pytest.mark.anyio
@@ -58,6 +61,7 @@ async def test_dashboard_redirects_without_session(app_client: AsyncClient) -> N
 async def test_ingest_form_handles_invalid_url(
     app_client: AsyncClient,
     system_login_credentials: tuple[str, str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     email, password = system_login_credentials
     login_response = await app_client.post(
@@ -66,6 +70,9 @@ async def test_ingest_form_handles_invalid_url(
         follow_redirects=False,
     )
     app_client.cookies.update(login_response.cookies)
+
+    enqueue_mock = AsyncMock()
+    monkeypatch.setattr(video_service, "enqueue_video", enqueue_mock)
 
     response = await app_client.post(
         "/admin/videos/ingest",
@@ -73,12 +80,14 @@ async def test_ingest_form_handles_invalid_url(
     )
     assert response.status_code == 422
     assert "URL must point to YouTube" in response.text
+    enqueue_mock.assert_not_awaited()
 
 
 @pytest.mark.anyio
 async def test_ingest_form_queues_video(
     app_client: AsyncClient,
     system_login_credentials: tuple[str, str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     email, password = system_login_credentials
     login_response = await app_client.post(
@@ -87,6 +96,9 @@ async def test_ingest_form_queues_video(
         follow_redirects=False,
     )
     app_client.cookies.update(login_response.cookies)
+
+    enqueue_mock = AsyncMock()
+    monkeypatch.setattr(video_service, "enqueue_video", enqueue_mock)
 
     response = await app_client.post(
         "/admin/videos/ingest",
@@ -100,6 +112,7 @@ async def test_ingest_form_queues_video(
     follow_up = await app_client.get(response.headers["location"])
     assert follow_up.status_code == 200
     assert "Video queued for processing" in follow_up.text
+    enqueue_mock.assert_awaited_once()
 
 
 @pytest.mark.anyio
@@ -154,6 +167,8 @@ async def test_video_detail_renders_video_without_clips(
     assert video.source_url in response.text
     assert "No clips generated yet" in response.text
     assert "Video is queued for processing" in response.text
+    assert "Queued" in response.text
+    assert "Downloading & detecting highlights" in response.text
 
 
 @pytest.mark.anyio
@@ -211,6 +226,7 @@ async def test_video_detail_renders_video_with_clips(
     assert "45s → 60s" in response.text
     assert clip1.local_path in response.text
     assert "View transcript" in response.text
+    assert "Clips ready" in response.text
 
 
 @pytest.mark.anyio
@@ -250,3 +266,55 @@ async def test_video_list_shows_clip_summary(
     assert "1 rendering" in response.text
     assert "View details →" in response.text
     assert f"/admin/videos/{video.id}" in response.text
+
+
+@pytest.mark.anyio
+async def test_video_status_endpoint_requires_auth(app_client: AsyncClient) -> None:
+    response = await app_client.get("/admin/videos/1/status")
+    assert response.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_video_status_endpoint_returns_video_payload(
+    app_client: AsyncClient,
+    system_login_credentials: tuple[str, str],
+    db_session: AsyncSession,
+) -> None:
+    video = Video(
+        source_url="https://www.youtube.com/watch?v=status_test",
+        status=VideoStatus.PROCESSING.value,
+        duration_seconds=120,
+        file_size_bytes=25_000_000,
+    )
+    db_session.add(video)
+    await db_session.commit()
+    await db_session.refresh(video)
+
+    clip = Clip(
+        video_id=video.id,
+        start_sec=5,
+        end_sec=40,
+        status=ClipStatus.RENDERING.value,
+        caption_text="Testing status JSON",
+    )
+    db_session.add(clip)
+    await db_session.commit()
+
+    email, password = system_login_credentials
+    login_response = await app_client.post(
+        "/admin/login",
+        data={"email": email, "password": password},
+        follow_redirects=False,
+    )
+    app_client.cookies.update(login_response.cookies)
+
+    response = await app_client.get(f"/admin/videos/{video.id}/status")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == video.id
+    assert payload["status"] == VideoStatus.PROCESSING.value
+    assert payload["duration_seconds"] == 120
+    assert payload["file_size_bytes"] == 25_000_000
+    assert isinstance(payload["clips"], list)
+    assert payload["clips"][0]["caption_text"] == "Testing status JSON"
+    assert payload["clips"][0]["status"] == ClipStatus.RENDERING.value
