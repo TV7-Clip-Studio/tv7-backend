@@ -72,7 +72,10 @@ Respond ONLY with valid JSON in this exact format:
 
 
 async def detect_highlights(
-    transcript: str, duration_seconds: int, video_id: int
+    transcript: str,
+    duration_seconds: int,
+    video_id: int,
+    transcript_language: str | None = None,
 ) -> list[ClipSegment]:
     """
     Analyze transcript and detect engaging clip segments using OpenAI.
@@ -96,17 +99,23 @@ async def detect_highlights(
 
     client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
+    language_note = transcript_language or "unknown"
     user_prompt = f"""Video duration: {duration_seconds} seconds
+Transcript language: {language_note}
 
 Transcript:
 {transcript}
 
-Please identify 3-5 engaging segments for short-form content. Return your response as JSON only."""
+Please identify 3-5 engaging segments for short-form content. Even if the transcript is not in English, you must understand it and write the hook text in English. Return your response as JSON only."""
 
     try:
         logger.info(
             "Calling OpenAI for highlight detection",
-            extra={"video_id": video_id, "transcript_length": len(transcript)},
+            extra={
+                "video_id": video_id,
+                "transcript_length": len(transcript),
+                "transcript_language": transcript_language,
+            },
         )
 
         response = await client.chat.completions.create(

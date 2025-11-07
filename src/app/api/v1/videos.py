@@ -49,9 +49,25 @@ def _serialize_response(result: VideoIngestionResult) -> VideoIngestResponse:
         source_url=video.source_url,
         local_path=video.local_path,
         transcript_text=video.transcript_text,
+        transcript_language=video.transcript_language,
+        duration_seconds=video.duration_seconds,
+        file_size_bytes=video.file_size_bytes,
+        error_message=video.error_message,
         status=VideoStatus(video.status),
         created_at=video.created_at,
         updated_at=video.updated_at,
         clips=[],
     )
     return VideoIngestResponse(video=video_schema, queued=result.queued, created=result.created)
+
+
+@router.get("/{video_id}", response_model=VideoRead)
+async def get_video_status(
+    video_id: int, repo: VideoRepository = Depends(get_video_repository)
+) -> VideoRead:
+    video = await repo.get_with_clips(video_id)
+    if not video:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found")
+
+    video_schema: VideoRead = VideoRead.model_validate(video, from_attributes=True)
+    return video_schema

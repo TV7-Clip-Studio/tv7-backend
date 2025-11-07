@@ -90,6 +90,9 @@ async def ingest_video(
         created = True
         logger.info("Created new video record", extra={"video_id": video.id})
 
+    # Ensure the new/updated video is visible to other sessions (inline pipeline, workers)
+    await repo.commit()
+
     dispatcher = task_dispatcher or _default_dispatch
     await dispatcher(video.id, video.source_url)
     video = await repo.refresh(video)

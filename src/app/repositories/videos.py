@@ -58,3 +58,7 @@ class VideoRepository:
         if video:
             await self._session.delete(video)
             await self._session.flush()
+
+    async def commit(self) -> None:
+        """Persist pending changes so other sessions can observe them."""
+        await self._session.commit()

@@ -70,6 +70,10 @@ class VideoRead(BaseModel):
     source_url: str
     local_path: str | None
     transcript_text: str | None
+    transcript_language: str | None = None
+    duration_seconds: int | None = None
+    file_size_bytes: int | None = None
+    error_message: str | None = None
     status: VideoStatus
     created_at: datetime
     updated_at: datetime

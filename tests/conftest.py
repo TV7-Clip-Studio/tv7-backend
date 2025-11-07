@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 from collections.abc import AsyncIterator, Generator
 from typing import Any
@@ -127,15 +126,6 @@ async def configure_app_database(
     monkeypatch.setattr(queue_module, "get_broker", _get_stub_broker, raising=False)
     monkeypatch.setattr(queue_module, "ensure_broker", _get_stub_broker, raising=False)
 
-    async def _enqueue_stub(
-        video_id: int, *, source_url: str
-    ) -> None:  # pragma: no cover - test helper
-        logger = logging.getLogger("tests.enqueue_stub")
-        logger.info("Stub enqueue", extra={"video_id": video_id, "source_url": source_url})
-
-    monkeypatch.setattr("app.services.ingest.get_broker", _get_stub_broker, raising=False)
-    monkeypatch.setattr("app.services.ingest.enqueue_video", _enqueue_stub, raising=False)
-    monkeypatch.setattr("app.services.videos.enqueue_video", _enqueue_stub, raising=False)
     dramatiq.set_broker(stub_broker)
 
     tasks_module.process_video.broker = stub_broker
