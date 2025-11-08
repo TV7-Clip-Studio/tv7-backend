@@ -9,13 +9,18 @@ from app.services import youtube_downloader
 
 
 @dataclass
+class _Snippet:
+    text: str
+
+
+@dataclass
 class _DummyTranscript:
     language_code: str
     is_generated: bool
     lines: list[str]
 
-    def fetch(self) -> list[dict[str, str]]:
-        return [{"text": line} for line in self.lines]
+    def fetch(self) -> list[_Snippet]:
+        return [_Snippet(text=line) for line in self.lines]
 
 
 class _DummyTranscriptList:

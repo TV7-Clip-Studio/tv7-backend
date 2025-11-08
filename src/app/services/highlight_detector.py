@@ -15,6 +15,31 @@ logger = logging.getLogger(__name__)
 MIN_SEGMENT_DURATION = 15
 MAX_SEGMENT_DURATION = 90
 
+LANGUAGE_NAME_OVERRIDES = {
+    "en": "English",
+    "es": "Spanish",
+    "es-419": "Latin American Spanish",
+    "pt": "Portuguese",
+    "pt-BR": "Brazilian Portuguese",
+    "fr": "French",
+    "de": "German",
+    "it": "Italian",
+    "ja": "Japanese",
+    "ko": "Korean",
+}
+
+
+def _describe_language(code: str | None) -> str:
+    if not code:
+        return "English"
+    normalized = code.lower()
+    if normalized in LANGUAGE_NAME_OVERRIDES:
+        return LANGUAGE_NAME_OVERRIDES[normalized]
+    for key, name in LANGUAGE_NAME_OVERRIDES.items():
+        if normalized.startswith(key):
+            return name
+    return code
+
 
 class HighlightDetectionError(Exception):
     """Raised when highlight detection fails."""
@@ -99,14 +124,19 @@ async def detect_highlights(
 
     client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
-    language_note = transcript_language or "unknown"
+    language_code = (transcript_language or "en").lower()
+    language_name = _describe_language(transcript_language)
     user_prompt = f"""Video duration: {duration_seconds} seconds
-Transcript language: {language_note}
+Transcript language code: {language_code}
+Transcript language name: {language_name}
 
 Transcript:
 {transcript}
 
-Please identify 3-5 engaging segments for short-form content. Even if the transcript is not in English, you must understand it and write the hook text in English. Return your response as JSON only."""
+Instructions:
+- Identify 3-5 engaging segments for short-form content.
+- EVERY hook must be written entirely in {language_name} (language code {language_code}). Never switch to another language unless the transcript is in that language.
+- Respond only with valid JSON describing the clips (start_sec, end_sec, hook)."""
 
     try:
         logger.info(

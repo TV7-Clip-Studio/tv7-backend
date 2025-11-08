@@ -91,7 +91,7 @@ async def configure_app_database(
     db_engine: AsyncEngine,
 ) -> AsyncIterator[None]:
     """Route the app's database utilities to the in-memory test engine."""
-    if request.node.get_closest_marker("no_db_override"):
+    if request.node.get_closest_marker("no_db_override") or request.node.get_closest_marker("ui"):
         yield
         return
 

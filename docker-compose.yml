@@ -7,11 +7,13 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       DRAMATIQ_BROKER: ${DRAMATIQ_BROKER:-redis}
       PYTHONPATH: src
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --app-dir src
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --app-dir src --reload
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on: [postgres, redis]
     volumes:
+      - ./src:/app/src
+      - ./alembic:/app/alembic
       - ./media:/app/media
 
   postgres:
@@ -41,6 +43,9 @@ services:
     command: python -m scripts.run_worker
     depends_on: [postgres, redis]
     volumes:
+      - ./src:/app/src
+      - ./scripts:/app/scripts
+      - ./alembic:/app/alembic
       - ./media:/app/media
 
 volumes:

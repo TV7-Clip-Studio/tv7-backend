@@ -97,7 +97,19 @@ def _fetch_transcript(video_id: str) -> tuple[str | None, str | None]:
 
         # Fetch and concatenate transcript segments
         segments = transcript.fetch()
-        text = " ".join(segment["text"].strip() for segment in segments if segment["text"].strip())
+        text = " ".join(
+            (
+                getattr(segment, "text", "").strip()
+                if not isinstance(segment, dict)
+                else segment.get("text", "").strip()
+            )
+            for segment in segments
+            if (
+                getattr(segment, "text", "")
+                if not isinstance(segment, dict)
+                else segment.get("text", "")
+            )
+        ).strip()
         language = getattr(transcript, "language_code", None)
         return text or None, language
 

@@ -6,6 +6,8 @@ from collections.abc import Iterator
 import httpx
 import pytest
 
+from app.core.config import settings
+
 
 @pytest.fixture(scope="session")
 def base_url() -> str:
@@ -28,13 +30,21 @@ def ensure_server(base_url: str) -> None:
 def seeded_user(ensure_server: None) -> Iterator[tuple[str, str]]:
     """Provide operator credentials for UI smoke tests."""
     _ = ensure_server
-    email = os.getenv("UI_ADMIN_EMAIL") or os.getenv("ADMIN_USERNAME")
-    password = os.getenv("UI_ADMIN_PASSWORD") or os.getenv("ADMIN_PASSWORD")
+    admin_username = settings.ADMIN_USERNAME
+    admin_password = settings.ADMIN_PASSWORD
+    email = os.getenv("UI_ADMIN_EMAIL") or admin_username
+    password = os.getenv("UI_ADMIN_PASSWORD") or admin_password
     if not email or not password:  # pragma: no cover - runtime guardrail
         pytest.skip(
-            "UI smoke requires UI_ADMIN_EMAIL/ADMIN_USERNAME and UI_ADMIN_PASSWORD/ADMIN_PASSWORD"
+            "UI smoke requires operator credentials via UI_ADMIN_* or ADMIN_USERNAME/ADMIN_PASSWORD"
         )
     assert email is not None
     assert password is not None
     credentials: tuple[str, str] = (email, password)
     yield credentials
+
+
+@pytest.fixture(autouse=True)
+def configure_app_database() -> Iterator[None]:
+    """Override the project-wide DB fixture for UI tests (no async loop)."""
+    yield
