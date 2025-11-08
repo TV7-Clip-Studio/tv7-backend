@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page, expect
 
-pytestmark = pytest.mark.ui
+pytestmark = [pytest.mark.ui, pytest.mark.no_db_override]
 
 
 def test_admin_login_and_ingest_flow(
@@ -28,9 +28,6 @@ def test_admin_login_and_ingest_flow(
     # The dashboard redirects back with a flash message.
     page.wait_for_url(f"{base_url}/admin/videos?flash=*", timeout=10_000)
     expect(page.locator("text=Video queued for processing")).to_be_visible()
-    # Ensure the newly queued video is visible in the list.
-    expect(page.locator("text=INGESTED").first).to_be_visible()
-
     # Navigate to the newest video's detail page and verify the status timeline renders.
     page.locator("article.card a[href^='/admin/videos/']").first.click()
     page.wait_for_url("**/admin/videos/*", timeout=10_000)

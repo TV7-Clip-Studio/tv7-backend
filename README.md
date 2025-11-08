@@ -2,11 +2,21 @@
 ## Quickstart (Docker-first)
 
 ```bash
+# 1. Copy environment template
 cp .env.example .env
+
+# 2. Start all services
 make up             # runs docker compose up --build in the foreground
+
+# 3. Verify API is running (in another terminal)
+curl http://localhost:8000/health
 ```
 
-`make up` launches the API, worker, Postgres, and Redis services and follows the logs so you can watch the pipeline in real time. To stop everything, press `Ctrl+C` or run `make down`.
+`make up` launches the API, worker, Postgres, and Redis services and follows the logs so you can watch the pipeline in real time.
+
+**Note:** The default port is `8000`. If you changed `API_PORT` in `.env`, use that port instead.
+
+To stop everything, press `Ctrl+C` or run `make down`.
 
 ### Running multiple local instances
 
@@ -40,14 +50,133 @@ REDIS_PORT=6380
 
 Replace the values per instance. These variables only affect local Docker Compose port bindings; they are not required in hosted environments such as Fly.
 
-### Alternative: direct uvicorn
+## Development Workflow
 
-If you prefer to run without Docker (e.g., quick unit testing), you can still bootstrap a virtualenv and start Uvicorn manually:
+### Docker Development (Recommended)
+
+The Docker setup includes **hot-reload** for the API service. Code changes in `src/`, `alembic/`, and templates automatically reload the server without rebuilding.
+
+#### Start everything in background:
+```bash
+make up DETACH=1
+# or: docker compose up -d
+```
+
+#### View logs:
+```bash
+docker compose logs -f api worker
+# or: make logs (API + Postgres only)
+```
+
+#### When to restart vs rebuild:
+
+**✅ Code changes** → Auto-reload (no action needed)
+- Changes to Python files in `src/`
+- Changes to Jinja templates
+- Changes to Alembic migrations
+
+**🔄 Environment changes** → Restart only
+```bash
+docker compose restart api worker
+```
+
+**🏗️ Dependency changes** → Rebuild
+```bash
+docker compose down
+docker compose up --build -d
+# or: make down && make up DETACH=1
+```
+
+**⚙️ Worker code changes** → Restart worker
+```bash
+docker compose restart worker
+```
+
+#### Run database migrations:
+```bash
+docker compose exec api alembic upgrade head
+# or: docker compose exec api make upgrade
+```
+
+#### Stop everything:
+```bash
+make down
+# or: docker compose down
+```
+
+### Local Development (Direct uvicorn)
+
+For faster iteration without Docker (requires local Postgres and Redis):
+
+#### First-time setup:
+```bash
+# Create virtualenv and install dependencies
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+
+# Copy environment template
+cp .env.example .env
+# Edit .env: set DATABASE_URL to localhost Postgres, REDIS_URL, etc.
+
+# Start local Postgres (if needed)
+docker compose up -d postgres redis
+```
+
+#### Run API with hot-reload:
+```bash
+# Option 1: Using uvicorn directly
+source .venv/bin/activate
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --app-dir src
+
+# Option 2: Using make
+make dev  # Starts Postgres in Docker, API locally with hot-reload
+```
+
+#### Run worker locally:
+```bash
+# With Redis broker (requires redis running)
+DRAMATIQ_BROKER=redis make worker
+
+# With stub broker (inline processing, no worker needed)
+DRAMATIQ_BROKER=stub  # Set in .env, then start API only
+```
+
+#### VS Code debugging:
+1. Select Python interpreter: `Cmd+Shift+P` → "Python: Select Interpreter" → `.venv/bin/python`
+2. Set breakpoints in your code
+3. Press `F5` → Select "uvicorn" or "pytest: Current file"
+4. See [.vscode/launch.json](.vscode/launch.json) for available debug configurations
+
+### Common Development Tasks
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --app-dir src
+# Code quality checks (run before committing)
+make fmt           # Format code with Black and Ruff
+make lint          # Check linting rules
+make type          # Run mypy type checking
+make sec           # Security scan with Bandit
+
+# Database migrations
+make revision m="add new field"  # Create new migration
+make upgrade                      # Apply pending migrations
+make downgrade                    # Rollback last migration
+
+# Create admin user
+docker compose exec api scripts/create_admin_user.sh --email admin@test.com --full-name "Admin"
+
+# View application logs
+docker compose logs -f api         # API logs only
+docker compose logs -f worker      # Worker logs only
+docker compose logs -f api worker  # Both
+
+# Access running container
+docker compose exec api bash       # Shell into API container
+docker compose exec api python     # Python REPL with app context
+
+# Clean up Docker resources
+docker compose down -v             # Stop and remove volumes (fresh DB)
+docker system prune                # Clean up unused Docker resources
 ```
 
 ## Environment
@@ -148,30 +277,97 @@ We host production/staging Postgres on Neon. The full setup guide—covering poo
 
 ## Testing
 
-- Unit & fast async tests (SQLite-backed fixtures):
-  ```bash
-  make test
-  ```
+### Quick Reference
 
-- Full system tests with real Postgres (requires Docker; spins up a disposable container via Testcontainers):
-  ```bash
-  make test-integration
-  # or: pytest --override-ini addopts= -p no:cov -m integration tests/integration
-  ```
+```bash
+# Run all unit tests (fast, SQLite-backed)
+make test
 
-  By default the suite tries to start a disposable Postgres via Docker. If Docker isn't available, set
-  `TEST_DATABASE_URL` to point at a reachable Postgres instance (e.g. `postgresql+asyncpg://user:pass@host:port/db`).
-  You can also override the container image with `TEST_POSTGRES_IMAGE`.
+# Run with coverage report
+make testcov
 
-See `docs/testing.md` for an overview of the unit, system, and integration layers plus guidance on where to place new scenarios.
+# Run integration tests (requires Docker)
+make test-integration
 
-- Pipeline smoke + fixtures:
-  ```bash
-  make pipeline-smoke
-  ```
-  Runs the regression suite with stubbed download/highlight services to make sure a video moves from `ingested` to `ready`, persisting transcript metadata and clips along the way.
-- Playwright UI smoke (requires the API running locally):
-  ```bash
-  make ui-smoke
-  ```
-  Logs into `/admin/videos`, queues a video, and checks the real-time status timeline on the detail page. Use `DRAMATIQ_BROKER=stub` for this run so the inline pipeline updates the UI instantly.
+# Run pipeline regression tests
+make pipeline-smoke
+
+# Run UI browser tests (requires running app)
+make ui-smoke
+```
+
+### Test Types
+
+**Unit Tests** (unmarked, fast)
+```bash
+make test
+# or: pytest tests/ -v --no-cov
+```
+- SQLite-backed fixtures
+- No external dependencies
+- Covered by default in `make test`
+
+**Integration Tests** (marked with `@pytest.mark.integration`)
+```bash
+make test-integration
+# or: pytest -m integration tests/integration
+```
+- Requires Docker (spins up disposable Postgres via Testcontainers)
+- Tests with real database
+- Override with `TEST_DATABASE_URL` if Docker unavailable
+- Override image with `TEST_POSTGRES_IMAGE`
+
+**System Tests** (marked with `@pytest.mark.system`)
+```bash
+pytest -m system tests/system -v
+```
+- End-to-end FastAPI flows
+- Uses test database fixtures
+- Covered by default in `make test`
+
+**Regression Tests** (marked with `@pytest.mark.regression`)
+```bash
+make pipeline-smoke
+# or: pytest -m regression tests/regression
+```
+- Full pipeline validation with stubbed externals
+- Ensures videos progress: `ingested → processing → ready`
+- Validates transcript metadata and clip generation
+
+**UI Tests** (marked with `@pytest.mark.ui`)
+```bash
+# Start the app first
+make up DETACH=1
+# Set credentials and run
+make ui-smoke
+# or: UI_BASE_URL=http://localhost:8000 pytest -m ui tests/ui
+```
+- Playwright browser automation
+- Requires running API server
+- Tests admin dashboard flows
+- Set `DRAMATIQ_BROKER=stub` for instant status updates
+
+### Running Specific Tests
+
+```bash
+# Single test file
+pytest tests/test_tasks.py -v
+
+# Single test function
+pytest tests/test_tasks.py::test_process_video -v
+
+# Pattern matching
+pytest tests/ -k "youtube" -v
+
+# With coverage for specific module
+pytest tests/test_tasks.py --cov=app.services.tasks --cov-report=term-missing
+```
+
+### Debugging Tests in VS Code
+
+1. Open the test file
+2. Set breakpoints (click left of line number)
+3. Press `F5` → Select "pytest: Current file"
+4. Or use the Testing panel (flask icon) to run/debug individual tests
+
+See `docs/testing.md` for an overview of test architecture and where to place new scenarios.

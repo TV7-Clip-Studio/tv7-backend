@@ -134,4 +134,4 @@ pipeline-smoke: deps
 
 ui-smoke: deps
 	$(PLAYWRIGHT) install --with-deps chromium >/dev/null
-	UI_BASE_URL=$(UI_BASE_URL) $(PYTEST) --override-ini addopts= -m ui tests/ui
+	UI_BASE_URL=$${UI_BASE_URL:-http://127.0.0.1:$(API_PORT)} $(PYTEST) --no-cov --override-ini addopts= -m ui tests/ui

@@ -3,17 +3,55 @@
   "configurations": [
     {
       "name": "uvicorn",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "module": "uvicorn",
-      "args": ["app.main:app", "--reload"]
+      "args": ["app.main:app", "--reload", "--host", "0.0.0.0", "--port", "${env:API_PORT}"],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      },
+      "envFile": "${workspaceFolder}/.env",
+      "justMyCode": false,
+      "cwd": "${workspaceFolder}"
     },
     {
-      "name": "pytest",
-      "type": "python",
+      "name": "pytest: All tests",
+      "type": "debugpy",
       "request": "launch",
       "module": "pytest",
-      "args": ["-q"]
+      "args": ["tests", "-v", "--no-cov"],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      },
+      "envFile": "${workspaceFolder}/.env",
+      "justMyCode": false,
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "pytest: Current file",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${file}", "-v", "--no-cov"],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      },
+      "envFile": "${workspaceFolder}/.env",
+      "justMyCode": false,
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "pytest: Current test function",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${file}::${selectedText}", "-v", "--no-cov"],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      },
+      "envFile": "${workspaceFolder}/.env",
+      "justMyCode": false,
+      "cwd": "${workspaceFolder}"
     }
   ]
 }
