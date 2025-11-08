@@ -9,3 +9,13 @@ dist/
 !.env.example
 alembic/versions/__pycache__/
 .DS_Store
+
+# Media files (keep folder structure, exclude contents)
+media/*
+!media/.gitkeep
+!media/videos/
+media/videos/*
+!media/videos/.gitkeep
+!media/clips/
+media/clips/*
+!media/clips/.gitkeep
