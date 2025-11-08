@@ -49,9 +49,12 @@ tests/test_auth_api.py
 tests/test_db_base.py
 tests/test_errors.py
 tests/test_health.py
+tests/test_ingest_service.py
 tests/test_main_endpoints.py
 tests/test_tasks.py
 tests/test_users_api.py
+tests/test_users_service.py
 tests/test_video_ingest_api.py
 tests/test_video_models.py
 tests/test_videos_service.py
+tests/test_youtube_downloader.py
