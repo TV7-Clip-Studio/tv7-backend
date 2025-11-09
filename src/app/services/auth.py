@@ -14,7 +14,7 @@ class InvalidCredentialsError(Exception):
 
 async def authenticate_user(email: str, password: str, repo: UserRepository) -> User:
     user = await repo.get_by_email(email)
-    if not user or not verify_password(password, user.password_hash):
+    if not user or not user.password_hash or not verify_password(password, user.password_hash):
         raise InvalidCredentialsError("Invalid email or password")
     return user
 
