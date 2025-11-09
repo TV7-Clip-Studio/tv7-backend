@@ -10,6 +10,10 @@ MYPY := $(VENV)/bin/mypy
 BANDIT := $(VENV)/bin/bandit
 ALEMBIC := $(VENV)/bin/alembic
 COMPOSE ?= docker compose
+PWHEADLESS ?= true
+PWSLOWMO ?= 0
+UI_TEST ?= tests/ui/test_admin_ingest_ui.py::test_admin_login_and_ingest_flow
+NON_UI_TEST_ARGS ?= tests --ignore=tests/ui
 
 API_PORT_FILE := $(strip $(shell awk -F= '$$1=="API_PORT"{print $$2}' .env 2>/dev/null))
 POSTGRES_PORT_FILE := $(strip $(shell awk -F= '$$1=="POSTGRES_PORT"{print $$2}' .env 2>/dev/null))
@@ -54,7 +58,7 @@ endif
         revision upgrade downgrade migrate up down build restart logs dev smoke \
         smoke-fly pipeline-smoke ui-smoke \
         admin-credentials worker \
-        test-integration
+        test-integration test-ui test-ui-visual test-suite
 
 deps:
 	@[ -d $(VENV) ] || python -m venv $(VENV)
@@ -87,6 +91,16 @@ testcov:
 
 test-integration:
 	$(PYTEST) --override-ini addopts= -p no:cov -m integration tests/integration
+
+test-ui:
+	PWHEADLESS=$(PWHEADLESS) PWSLOWMO=$(PWSLOWMO) $(PYTEST) -v --no-cov $(UI_TEST)
+
+test-ui-visual:
+	PWHEADLESS=false PWSLOWMO=500 $(PYTEST) -v --no-cov $(UI_TEST)
+
+test-suite:
+	$(PYTEST) -v --no-cov $(NON_UI_TEST_ARGS)
+	$(MAKE) test-ui
 
 revision:
 	@if [ -z "$(m)" ]; then echo "Use: make revision m='message'"; exit 1; fi
@@ -134,4 +148,4 @@ pipeline-smoke: deps
 
 ui-smoke: deps
 	$(PLAYWRIGHT) install --with-deps chromium >/dev/null
-	UI_BASE_URL=$${UI_BASE_URL:-http://127.0.0.1:$(API_PORT)} $(PYTEST) --no-cov --override-ini addopts= -m ui tests/ui
+	PWHEADLESS=$(PWHEADLESS) PWSLOWMO=$(PWSLOWMO) $(PYTEST) --no-cov --override-ini addopts= -m ui tests/ui

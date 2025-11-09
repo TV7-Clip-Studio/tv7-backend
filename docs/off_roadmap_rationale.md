@@ -92,6 +92,53 @@
 
 ---
 
+### U.5 — Google OAuth Social Login
+
+**Why built now:**
+- **User experience:** Social login reduces friction—users don't need to remember another password or go through email verification flows.
+- **Market expectations:** Modern web applications increasingly offer social login as a standard feature. Users expect to "Sign in with Google" alongside traditional email/password.
+- **Security benefits:** Google handles password management, 2FA, and account recovery. Reduces our attack surface and eliminates password reset flows.
+- **Account verification:** Google emails are pre-verified, eliminating the need for email confirmation workflows.
+- **Foundation for future providers:** OAuth infrastructure (state validation, token exchange, account linking) can be extended to support GitHub, Microsoft, etc. with minimal changes.
+
+**Implementation decisions:**
+- **Google-first, multi-provider ready:** Focus on Google OAuth initially (most widely used), but design the schema and service layer to accommodate multiple providers (GitHub, Microsoft) in the future via the `auth_provider` enum.
+- **Automatic account linking:** If a user signs in with Google and their email matches an existing account, automatically link the OAuth provider to that account. This works because Google verifies emails, so we can trust the match. Reduces duplicate accounts.
+- **Authlib library:** Use `authlib>=1.3` rather than implementing OAuth from scratch. Authlib is the industry standard Python OAuth library, actively maintained, and supports OIDC (OpenID Connect) for fetching user profile data.
+- **State parameter for CSRF protection:** Generate a cryptographically secure random state, sign it with `OAUTH_STATE_SECRET`, and validate on callback. Store used states in Redis with a 10-minute TTL to prevent replay attacks.
+- **Nullable password hash:** Make `User.password_hash` nullable to support Google-only accounts. Existing email/password users keep their hashes; Google users have `password_hash=NULL`.
+- **Admin + API support:** OAuth works for both admin dashboard (cookie-based sessions) and API clients (JWT bearer tokens). Use `redirect` query param (`?redirect=admin`) to distinguish the flow.
+- **Backward compatible:** Email/password login remains fully functional. Google login is an *addition*, not a replacement. Users can choose either method.
+
+**Notable dependencies:**
+- **Google Cloud Project:** Requires creating a Google Cloud Project, enabling Google+ API, and configuring OAuth consent screen and credentials. See README for setup instructions.
+- **Environment variables:** Four new required settings (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `OAUTH_STATE_SECRET`). If not configured, Google login button won't appear (graceful degradation).
+- **Redis for state storage:** In production, use Redis to store and validate OAuth state tokens with TTL. Prevents state reuse/replay attacks.
+- **Alembic migration:** Database schema changes (new columns, nullable password hash) require a migration. Backfill existing users with `auth_provider='email'`.
+
+**Security considerations:**
+- **State validation:** Every OAuth callback must validate the `state` parameter to prevent CSRF attacks. State must be signed, time-limited (10 minutes), and single-use.
+- **Redirect URI whitelist:** Only allow whitelisted redirect URIs in Google Console. Never accept arbitrary redirect URIs from client requests.
+- **Account takeover prevention:** Automatic account linking is safe because Google verifies email ownership. We only link when `oauth_provider_id` matches or email matches exactly.
+- **Token security:** OAuth access tokens from Google are used once (to fetch user profile), then discarded. We issue our own JWT tokens using existing auth infrastructure.
+- **Profile picture URLs:** Store Google profile picture URLs but sanitize/validate before rendering in HTML to prevent XSS.
+
+**Important:**
+- **Email/password remains available:** Users can still sign in with traditional credentials. Google OAuth is optional for users but enabled by default if configured.
+- **Account linking is automatic:** If a user signs up with email/password, then later signs in with Google (same email), the accounts merge automatically. Log this event for audit trails.
+- **Password reset not needed for Google users:** Google-only users (no password hash) cannot use password reset flows. If they lose Google access, they need admin help to set a password or recover their account.
+- **Multiple providers future-proof:** The `auth_provider` field is an enum (`email`, `google`). Future providers (GitHub, Microsoft) can be added by extending the enum and duplicating the OAuth service pattern.
+- **Production redirect URI:** Update `GOOGLE_REDIRECT_URI` to production domain (e.g., `https://tv7.example.com/api/v1/auth/google/callback`) before deploying. Mismatched redirect URIs will cause Google to reject the OAuth flow.
+- **State storage scaling:** For high-traffic deployments, use Redis for state validation instead of in-memory storage. The plan assumes Redis (already used for Dramatiq) is available.
+
+**Testing strategy:**
+- **Mock Google responses:** Use `pytest` fixtures to mock Google's authorization URL, token exchange, and user info endpoints. No real Google API calls in tests.
+- **State validation tests:** Ensure invalid/missing/expired/reused states are rejected (CSRF protection).
+- **Account linking tests:** Verify new user creation, existing user login, and automatic linking when emails match.
+- **Error handling tests:** Handle Google API errors gracefully (network failures, invalid tokens, denied consent).
+
+---
+
 ## General Off-Roadmap Philosophy
 
 **When to add off-roadmap features:**

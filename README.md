@@ -187,8 +187,12 @@ docker system prune                # Clean up unused Docker resources
   - `REDIS_URL` (default `redis://localhost:6379/0` locally; `redis://redis:6379/0` in Docker).
   - `DRAMATIQ_BROKER` (`stub` for tests/standalone dev, `redis` when the queue is available). When `stub` is active the entire download + highlight pipeline runs inline inside the API process, so video status transitions (`INGESTED → PROCESSING → READY`) appear immediately for admin operators without running `make worker`.
   - `WORKER_CONCURRENCY` controls the worker pool size.
-- Host-port overrides for Docker Compose instances:
+- API origin (used for OAuth redirects, UI tests, and Docker port binding):
+  - `API_SCHEME` (defaults to `http`).
+  - `API_HOST` (defaults to `127.0.0.1`).
   - `API_PORT` (defaults to `8000`).
+  Set `API_PORT` per checkout when running multiple instances; Docker Compose inherits it automatically.
+- Host-port overrides for Docker Compose instances:
   - `POSTGRES_PORT` (defaults to `5432`).
   - `REDIS_PORT` (defaults to `6379`).
   Set them per shell invocation to run multiple stacks side-by-side.
@@ -289,10 +293,15 @@ make testcov
 # Run integration tests (requires Docker)
 make test-integration
 
+# Run entire suite sequentially (non-UI + UI)
+make test-suite
+
 # Run pipeline regression tests
 make pipeline-smoke
 
-# Run UI browser tests (requires running app)
+# Run UI browser test (Playwright, honors PWHEADLESS/PWSLOWMO)
+make test-ui
+# Run full Playwright suite
 make ui-smoke
 ```
 
@@ -338,14 +347,27 @@ make pipeline-smoke
 ```bash
 # Start the app first
 make up DETACH=1
-# Set credentials and run
+# Single interactive flow (default headless)
+make test-ui
+# Slow-mo run for debugging
+make test-ui-visual
+# Full Playwright suite
 make ui-smoke
-# or: UI_BASE_URL=http://localhost:8000 pytest -m ui tests/ui
 ```
 - Playwright browser automation
 - Requires running API server
 - Tests admin dashboard flows
+- `PWHEADLESS` (default `true`) and `PWSLOWMO` (default `0`) control browser visibility/speed
 - Set `DRAMATIQ_BROKER=stub` for instant status updates
+- Uses the same `ADMIN_USERNAME`/`ADMIN_PASSWORD` credentials as the HTTP Basic gate, so ensure a matching user exists via `scripts/create_admin_user.sh`
+
+**Entire suite (non-UI + UI)**
+```bash
+make test-suite
+```
+- Runs every non-UI test with verbose output via `pytest -v`
+- Finishes with the interactive UI flow so regressions are easy to spot
+- Use `make test-ui-visual` or override `PWHEADLESS=false PWSLOWMO=500` for watchable runs
 
 ### Running Specific Tests
 
