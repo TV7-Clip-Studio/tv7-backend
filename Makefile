@@ -148,4 +148,4 @@ pipeline-smoke: deps
 
 ui-smoke: deps
 	$(PLAYWRIGHT) install --with-deps chromium >/dev/null
-	UI_BASE_URL=$${UI_BASE_URL:-http://127.0.0.1:$(API_PORT)} PWHEADLESS=$(PWHEADLESS) PWSLOWMO=$(PWSLOWMO) $(PYTEST) --no-cov --override-ini addopts= -m ui tests/ui
+	PWHEADLESS=$(PWHEADLESS) PWSLOWMO=$(PWSLOWMO) $(PYTEST) --no-cov --override-ini addopts= -m ui tests/ui

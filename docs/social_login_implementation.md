@@ -45,20 +45,33 @@ File: alembic/versions/XXXX_add_oauth_support.py Migration steps:
 - Add indexes/constraints mentioned earlier.
 2. Configuration Changes
 2.1 Environment Variables
-File: src/app/core/config.py Add OAuth config while deriving redirect URIs from canonical base URLs.
+File: `src/app/core/config.py` — rely on the API networking settings to derive redirect URIs automatically.
+```python
 class Settings(BaseSettings):
-    BACKEND_BASE_URL: AnyHttpUrl = "http://localhost:8000"  # already present; reuse
+    API_SCHEME: str = "http"
+    API_HOST: str = "127.0.0.1"
+    API_PORT: int = 8000
     GOOGLE_CLIENT_ID: str | None = None
     GOOGLE_CLIENT_SECRET: str | None = None
     GOOGLE_REDIRECT_PATH: str = "/api/v1/auth/google/callback"
     OAUTH_STATE_SECRET: str = "change-me-oauth-state"
 
-Add helper property:
+    @property
+    def backend_base_url(self) -> str:
+        ...
+
     @property
     def google_redirect_uri(self) -> str:
-        return urljoin(str(self.BACKEND_BASE_URL), self.GOOGLE_REDIRECT_PATH)
+        base = self.backend_base_url.rstrip("/")
+        path = (
+            self.GOOGLE_REDIRECT_PATH
+            if self.GOOGLE_REDIRECT_PATH.startswith("/")
+            else f"/{self.GOOGLE_REDIRECT_PATH}"
+        )
+        return f"{base}{path}"
+```
 
-This keeps `.env` simple (no per-environment copy-paste) and ensures Fly + localhost use the same path while only the base URL changes.
+Deployments only need to tweak `API_SCHEME`/`API_HOST`/`API_PORT`. Local environments automatically produce `http://127.0.0.1:<port>` while Fly production can set `API_SCHEME=https`, `API_HOST=forgotten-app.fly.dev`, and `API_PORT=443`.
 
 2.2 Update .env.example
 Add the new variables (without hardcoding full URIs):

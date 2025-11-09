@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
+from typing import cast
 
 import httpx
 import pytest
@@ -22,7 +23,8 @@ def browser_type_launch_args(browser_type_launch_args: dict) -> dict:
 @pytest.fixture(scope="session")
 def base_url() -> str:
     """Base URL for UI smoke tests - derives from Settings.API_PORT."""
-    return settings.ui_base_url.rstrip("/")
+    base = cast(str, settings.ui_base_url)
+    return base.rstrip("/")
 
 
 @pytest.fixture(scope="session")
@@ -42,15 +44,11 @@ def seeded_user(ensure_server: None) -> Iterator[tuple[str, str]]:
     _ = ensure_server
     admin_username = settings.ADMIN_USERNAME
     admin_password = settings.ADMIN_PASSWORD
-    email = settings.UI_ADMIN_EMAIL or admin_username
-    password = settings.UI_ADMIN_PASSWORD or admin_password
-    if not email or not password:  # pragma: no cover - runtime guardrail
-        pytest.skip(
-            "UI smoke requires operator credentials via UI_ADMIN_* or ADMIN_USERNAME/ADMIN_PASSWORD"
-        )
-    assert email is not None
-    assert password is not None
-    credentials: tuple[str, str] = (email, password)
+    if not admin_username or not admin_password:  # pragma: no cover - runtime guardrail
+        pytest.skip("UI smoke requires ADMIN_USERNAME/ADMIN_PASSWORD credentials")
+    assert admin_username is not None
+    assert admin_password is not None
+    credentials: tuple[str, str] = (admin_username, admin_password)
     yield credentials
 
 
