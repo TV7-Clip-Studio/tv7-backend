@@ -83,3 +83,8 @@
 - **Status:** Proposed
 - **Description:** Show user engagement metrics, last login times, and activity summaries.
 - **Rationale:** Helps operators identify inactive accounts and understand usage patterns.
+
+### Video Redownload Workflow
+- **Status:** Proposed
+- **Description:** Allow operators to explicitly re-download the original YouTube source (e.g., when the cached file is corrupted or when higher quality is desired) before regenerating highlights.
+- **Rationale:** Current reruns reuse the cached download/transcript for speed; building a controlled redownload flow ensures append-mode reruns remain fast while still giving operators an escape hatch when the cached artifact is invalid.

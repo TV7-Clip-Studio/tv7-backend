@@ -5,7 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.core.jwt import TokenType
-from app.db.models import ClipStatus, VideoStatus
+from app.db.models import ClipGenerationMode, ClipStatus, VideoStatus
 
 
 class Health(BaseModel):
@@ -75,6 +75,7 @@ class VideoRead(BaseModel):
     file_size_bytes: int | None = None
     error_message: str | None = None
     status: VideoStatus
+    clip_generation_mode: ClipGenerationMode
     created_at: datetime
     updated_at: datetime
     requested_by_user_id: int | None = None

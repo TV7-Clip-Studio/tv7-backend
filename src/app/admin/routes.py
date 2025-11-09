@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.jwt import JWTDecodeError, TokenType
-from app.db.models import User
+from app.db.models import ClipGenerationMode, User
 from app.deps.db import (
     get_user_repository,
     get_video_repository,
@@ -403,6 +403,32 @@ async def delete_video(
     return RedirectResponse(
         url="/admin/videos?flash=Video deleted successfully",
         status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@router.post("/videos/{video_id}/more-highlights")
+async def request_more_highlights(
+    request: Request,
+    video_id: int,
+    video_repo: VideoRepository = Depends(get_video_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+) -> Response:
+    user = await _current_admin_user(request, user_repo)
+    if not user:
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    video = await video_repo.get(video_id)
+    if not video:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found")
+
+    await ingest_video(
+        video.source_url,
+        video_repo,
+        requested_by_user_id=user.id,
+        clip_mode=ClipGenerationMode.APPEND,
+    )
+    return _redirect_with_message(
+        f"/admin/videos/{video_id}", "Requested additional highlights. Queueing now."
     )
 
 

@@ -5,9 +5,10 @@ import logging
 from collections.abc import Coroutine
 
 from dramatiq import actor
+from sqlalchemy import delete
 
 from app.db.base import session_scope
-from app.db.models import Clip, ClipStatus, Video, VideoStatus
+from app.db.models import Clip, ClipGenerationMode, ClipStatus, Video, VideoStatus
 from app.repositories.youtube_credentials import YouTubeCredentialRepository
 from app.services.highlight_detector import HighlightDetectionError
 from app.services.highlight_detector import detect_highlights as detect_highlights_service
@@ -91,6 +92,18 @@ async def _download_video_task(video_id: int) -> None:
                 )
 
         try:
+            append_mode = video.clip_generation_mode == ClipGenerationMode.APPEND.value
+            if (
+                append_mode
+                and video.local_path
+                and video.transcript_text
+                and video.duration_seconds
+            ):
+                logger.info(
+                    "Skipping video download; reusing cached assets",
+                    extra={"video_id": video_id},
+                )
+                return
             # Download video and transcript
             result = download_video_and_transcript(
                 video_id,
@@ -185,6 +198,10 @@ async def _detect_highlights_task(video_id: int) -> None:
             if not video.duration_seconds:
                 raise HighlightDetectionError("Video duration not available")
 
+            append_mode = video.clip_generation_mode == ClipGenerationMode.APPEND.value
+            if not append_mode:
+                await session.execute(delete(Clip).where(Clip.video_id == video_id))
+
             # Call LLM to detect highlights
             segments = await detect_highlights_service(
                 transcript=video.transcript_text,
@@ -204,6 +221,7 @@ async def _detect_highlights_task(video_id: int) -> None:
                 )
                 session.add(clip)
 
+            video.clip_generation_mode = ClipGenerationMode.REPLACE.value
             await session.flush()
 
             logger.info(
@@ -218,6 +236,7 @@ async def _detect_highlights_task(video_id: int) -> None:
             )
             video.status = VideoStatus.ERROR.value
             video.error_message = f"Highlight detection failed: {exc}"
+            video.clip_generation_mode = ClipGenerationMode.REPLACE.value
             await session.flush()
 
         except Exception as exc:
@@ -227,6 +246,7 @@ async def _detect_highlights_task(video_id: int) -> None:
             )
             video.status = VideoStatus.ERROR.value
             video.error_message = f"Unexpected error during highlight detection: {exc}"
+            video.clip_generation_mode = ClipGenerationMode.REPLACE.value
             await session.flush()
 
 

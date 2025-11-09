@@ -27,6 +27,7 @@ __all__ = [
     "VideoStatus",
     "ClipStatus",
     "AuthProvider",
+    "ClipGenerationMode",
 ]
 
 
@@ -48,6 +49,11 @@ class ClipStatus(str, Enum):
 class AuthProvider(str, Enum):
     EMAIL = "email"
     GOOGLE = "google"
+
+
+class ClipGenerationMode(str, Enum):
+    REPLACE = "replace"
+    APPEND = "append"
 
 
 class User(Base):
@@ -130,6 +136,12 @@ class Video(Base):
         nullable=False,
         default=VideoStatus.INGESTED.value,
         server_default=VideoStatus.INGESTED.value,
+    )
+    clip_generation_mode: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default=ClipGenerationMode.REPLACE.value,
+        server_default=ClipGenerationMode.REPLACE.value,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

@@ -7,7 +7,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin.routes import SESSION_COOKIE_NAME
-from app.db.models import Clip, ClipStatus, Video, VideoStatus
+from app.db.models import Clip, ClipGenerationMode, ClipStatus, Video, VideoStatus
 from app.services import videos as video_service
 
 
@@ -227,6 +227,46 @@ async def test_video_detail_renders_video_with_clips(
     assert clip1.local_path in response.text
     assert "View transcript" in response.text
     assert "Clips ready" in response.text
+
+
+@pytest.mark.anyio
+async def test_request_more_highlights_queues_append_mode(
+    app_client: AsyncClient,
+    system_login_credentials: tuple[str, str],
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video = Video(
+        source_url="https://www.youtube.com/watch?v=append-demo",
+        status=VideoStatus.READY.value,
+        transcript_text="ready",
+        clip_generation_mode=ClipGenerationMode.REPLACE.value,
+    )
+    db_session.add(video)
+    await db_session.commit()
+    await db_session.refresh(video)
+
+    enqueue_mock = AsyncMock()
+    monkeypatch.setattr(video_service, "enqueue_video", enqueue_mock)
+
+    email, password = system_login_credentials
+    login_response = await app_client.post(
+        "/admin/login",
+        data={"email": email, "password": password},
+        follow_redirects=False,
+    )
+    app_client.cookies.update(login_response.cookies)
+
+    response = await app_client.post(
+        f"/admin/videos/{video.id}/more-highlights",
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"].startswith(f"/admin/videos/{video.id}")
+    enqueue_mock.assert_awaited_once()
+
+    await db_session.refresh(video)
+    assert video.clip_generation_mode == ClipGenerationMode.APPEND.value
 
 
 @pytest.mark.anyio
