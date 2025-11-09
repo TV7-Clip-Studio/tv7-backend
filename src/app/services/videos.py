@@ -68,6 +68,7 @@ async def ingest_video(
     youtube_url: str,
     repo: VideoRepository,
     *,
+    requested_by_user_id: int | None = None,
     task_dispatcher: Callable[[int, str], Awaitable[None]] | None = None,
 ) -> VideoIngestionResult:
     parsed = urlparse(youtube_url)
@@ -84,11 +85,17 @@ async def ingest_video(
             extra={"video_id": video.id, "source_url": video.source_url},
         )
     else:
-        video = Video(source_url=youtube_url, status=VideoStatus.INGESTED.value)
+        video = Video(
+            source_url=youtube_url,
+            status=VideoStatus.INGESTED.value,
+            requested_by_user_id=requested_by_user_id,
+        )
         await repo.add(video)
         video = await repo.refresh(video)
         created = True
         logger.info("Created new video record", extra={"video_id": video.id})
+    if requested_by_user_id and video.requested_by_user_id is None:
+        video.requested_by_user_id = requested_by_user_id
 
     # Ensure the new/updated video is visible to other sessions (inline pipeline, workers)
     await repo.commit()

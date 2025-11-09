@@ -10,6 +10,11 @@ dist/
 alembic/versions/__pycache__/
 .DS_Store
 
+# YouTube cookies (never commit these!)
+youtube_cookies.txt
+youtube_cookies_b64.txt
+*_cookies.txt
+
 # Media files (keep folder structure, exclude contents)
 media/*
 !media/.gitkeep

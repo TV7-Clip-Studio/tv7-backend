@@ -35,6 +35,16 @@ class Settings(BaseSettings):
     MEDIA_STORAGE_DIR: str = "./media"
     VIDEO_QUALITY: str = "720p"
     MAX_VIDEO_FILE_SIZE_MB: int = 500
+    YOUTUBE_COOKIES_BROWSER: str | None = (
+        None  # chrome, firefox, safari, edge (disabled by default for Docker)
+    )
+    YOUTUBE_COOKIES_FILE: str | None = None  # Path to cookies.txt file (for production)
+    YOUTUBE_CLIENT_ID: str | None = None
+    YOUTUBE_CLIENT_SECRET: str | None = None
+    YOUTUBE_REDIRECT_URI: str | None = None
+    YOUTUBE_OAUTH_SCOPES: list[str] = [
+        "https://www.googleapis.com/auth/youtube.readonly",
+    ]
     OPENAI_API_KEY: str | None = None
     GOOGLE_CLIENT_ID: str | None = None
     GOOGLE_CLIENT_SECRET: str | None = None

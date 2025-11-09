@@ -23,7 +23,10 @@ async def test_full_pipeline_happy_path(
     monkeypatch.setattr(app_config.settings, "MEDIA_STORAGE_DIR", str(media_root))
     monkeypatch.setattr(app_config.settings, "OPENAI_API_KEY", "test-key", raising=False)
 
-    def fake_download(video_id: int, _source_url: str) -> DownloadResult:
+    def fake_download(
+        video_id: int, _source_url: str, *, access_token: str | None = None
+    ) -> DownloadResult:
+        del access_token
         storage_dir = media_root / "videos" / str(video_id)
         storage_dir.mkdir(parents=True, exist_ok=True)
         file_path = storage_dir / "source.mp4"

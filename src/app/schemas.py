@@ -77,6 +77,7 @@ class VideoRead(BaseModel):
     status: VideoStatus
     created_at: datetime
     updated_at: datetime
+    requested_by_user_id: int | None = None
     clips: list[ClipRead] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)

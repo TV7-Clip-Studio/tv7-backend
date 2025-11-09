@@ -47,6 +47,7 @@
 - 2.4 Enhance subtitle styling presets (font files, outlines, drop shadows) and ensure the renderer is idempotent with deterministic outputs on re-runs.
 - 2.5 Instrument each pipeline stage with structured logs, timing metrics, and error traces; expose aggregated stats via Prometheus and admin UI badges.
 - 2.6 Harden storage handling: centralize media directory configuration, add cleanup routines for stale temp files, and document local vs. remote storage strategies.
+- 2.7 ⬜ Implement YouTube OAuth connector to replace cookie-based authentication: add `youtube_credentials` table, build OAuth 2.0 flow with Google, implement token refresh, and integrate with youtube_downloader service. (See [docs/setup/youtube_oauth_connector.md](../setup/youtube_oauth_connector.md) for implementation plan)
 
 ## Phase 3 — Growth & Automation (Backlog)
 - 3.1 Replace stubbed publishing with real platform integrations (YouTube Shorts, TikTok, Instagram Reels) including OAuth flows, upload APIs, retry handling, and response persistence.

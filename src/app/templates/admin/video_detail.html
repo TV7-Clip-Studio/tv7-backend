@@ -88,6 +88,17 @@
       </p>
     </div>
 
+    {% if youtube_oauth_configured %}
+      {% if youtube_connected %}
+        <div class="flash" style="margin-top:1rem;">YouTube is connected. Downloads use your account permissions.</div>
+      {% else %}
+        <div class="flash error" style="margin-top:1rem;">
+          Connect your YouTube account to download restricted videos.
+          <a href="/admin/youtube/connect" style="color:#fff; text-decoration:underline;">Connect now →</a>
+        </div>
+      {% endif %}
+    {% endif %}
+
     {# Source Video Player #}
     {% if video.local_path %}
       <div id="video-player" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(148,163,184,0.15);">

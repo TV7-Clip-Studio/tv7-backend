@@ -178,6 +178,11 @@
 - **Implementation overview:** Centralize base directories in settings, add cleanup cron for temp dirs, document retention policy (delete intermediate files once clips ready). Evaluate checksum validations to avoid re-downloads.
 - **Important:** Plan for future migration to S3/GCS (Phase 3.5) by abstracting storage interactions early (e.g., `StorageService` interface).
 
+### 2.7 — YouTube OAuth connector ⬜
+- **Why:** Cookie-based authentication is fragile and requires manual refreshing every 1-2 weeks. OAuth provides a sustainable, officially-supported solution that auto-refreshes tokens and scales across multiple operators.
+- **Implementation overview:** Add `youtube_credentials` table with user_id (FK to users), access_token, refresh_token, token_type, scope, and expires_at. Build OAuth 2.0 flow with Google consent screen (`/admin/youtube/connect` initiates flow, `/admin/youtube/callback` stores tokens). Implement token refresh strategy (check expiry before downloads, refresh if needed). Update `youtube_downloader.py` to use OAuth tokens instead of cookies when available. Add admin UI controls ("Connect YouTube" / "Disconnect" buttons). See [docs/setup/youtube_oauth_connector.md](../setup/youtube_oauth_connector.md) for detailed implementation plan (database schema, security considerations, migration path).
+- **Important:** Requires Google Cloud project with YouTube Data API enabled and OAuth credentials configured. Store client_id/client_secret in environment variables (`YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REDIRECT_URI`). Tokens are sensitive—encrypt at rest or rely on database-level encryption. Provide graceful fallback to cookie-based auth when OAuth is not configured. Document cookie-to-OAuth migration path for existing deployments.
+
 ## Phase 3 — Growth & Automation
 
 ### 3.1 — Real publishing integrations

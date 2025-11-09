@@ -8,6 +8,7 @@ from dramatiq import actor
 
 from app.db.base import session_scope
 from app.db.models import Clip, ClipStatus, Video, VideoStatus
+from app.repositories.youtube_credentials import YouTubeCredentialRepository
 from app.services.highlight_detector import HighlightDetectionError
 from app.services.highlight_detector import detect_highlights as detect_highlights_service
 from app.services.queue import ensure_broker
@@ -16,6 +17,7 @@ from app.services.youtube_downloader import (
     VideoTooLargeError,
     download_video_and_transcript,
 )
+from app.services.youtube_oauth import get_valid_access_token
 
 logger = logging.getLogger(__name__)
 
@@ -75,9 +77,26 @@ async def _download_video_task(video_id: int) -> None:
             logger.error("Video not found for download", extra={"video_id": video_id})
             return
 
+        access_token: str | None = None
+        if video.requested_by_user_id:
+            credential_repo = YouTubeCredentialRepository(session)
+            try:
+                access_token = await get_valid_access_token(
+                    video.requested_by_user_id, credential_repo
+                )
+            except Exception as exc:  # pragma: no cover - network errors
+                logger.warning(
+                    "Failed to refresh YouTube access token",
+                    extra={"video_id": video_id, "error": str(exc)},
+                )
+
         try:
             # Download video and transcript
-            result = download_video_and_transcript(video_id, video.source_url)
+            result = download_video_and_transcript(
+                video_id,
+                video.source_url,
+                access_token=access_token,
+            )
 
             # Update video with download results
             video.local_path = result.local_path

@@ -57,7 +57,10 @@ async def test_run_pipeline_inline_happy_path(
     media_root.mkdir(parents=True, exist_ok=True)
     file_path = media_root / "source.mp4"
 
-    def fake_download(_video_id: int, _source_url: str) -> DownloadResult:
+    def fake_download(
+        _video_id: int, _source_url: str, *, access_token: str | None = None
+    ) -> DownloadResult:
+        del access_token
         file_path.write_bytes(b"video-bytes")
         return DownloadResult(
             local_path=str(file_path),
@@ -111,7 +114,10 @@ async def test_run_pipeline_inline_handles_errors(
     await db_session.flush()
     await db_session.refresh(video)
 
-    def failing_download(_video_id: int, _source_url: str) -> DownloadResult:
+    def failing_download(
+        _video_id: int, _source_url: str, *, access_token: str | None = None
+    ) -> DownloadResult:
+        del access_token
         raise DownloadError("boom")
 
     async def error_highlights(**_: object) -> list[ClipSegment]:

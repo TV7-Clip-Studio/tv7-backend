@@ -56,6 +56,7 @@ def _serialize_response(result: VideoIngestionResult) -> VideoIngestResponse:
         status=VideoStatus(video.status),
         created_at=video.created_at,
         updated_at=video.updated_at,
+        requested_by_user_id=video.requested_by_user_id,
         clips=[],
     )
     return VideoIngestResponse(video=video_schema, queued=result.queued, created=result.created)
