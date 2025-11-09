@@ -5,7 +5,7 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 
 import yt_dlp
 from youtube_transcript_api import YouTubeTranscriptApi
@@ -127,32 +127,38 @@ def _fetch_transcript(video_id: str) -> tuple[str | None, str | None]:
         return None, None
 
 
-def download_video_and_transcript(video_id: int, source_url: str) -> DownloadResult:
-    """
-    Download YouTube video and transcript.
-
-    Args:
-        video_id: Database video ID for organizing storage
-        source_url: YouTube video URL
-
-    Returns:
-        DownloadResult with local path, file size, transcript, and duration
-
-    Raises:
-        DownloadError: If download fails
-        VideoTooLargeError: If video exceeds MAX_VIDEO_FILE_SIZE_MB
-    """
-    # Create storage directory
+def _prepare_storage_paths(video_id: int) -> tuple[Path, Path, Path]:
     storage_dir = Path(settings.MEDIA_STORAGE_DIR) / "videos" / str(video_id)
     storage_dir.mkdir(parents=True, exist_ok=True)
-
     output_template = storage_dir / "source.%(ext)s"
     final_output_path = storage_dir / "source.mp4"
+    return storage_dir, output_template, final_output_path
 
-    # Configure yt-dlp options
-    max_file_size = settings.MAX_VIDEO_FILE_SIZE_MB * 1024 * 1024  # Convert to bytes
 
-    ydl_opts = {
+def _apply_cookie_auth(ydl_opts: dict[str, object]) -> None:
+    if settings.YOUTUBE_COOKIES_FILE:
+        cookies_path = Path(settings.YOUTUBE_COOKIES_FILE)
+        if cookies_path.exists():
+            ydl_opts["cookiefile"] = str(cookies_path)
+            logger.info(
+                "Using cookies file for YouTube download",
+                extra={"cookies_file": settings.YOUTUBE_COOKIES_FILE},
+            )
+        else:
+            logger.warning(
+                "Cookies file not found, downloading without authentication",
+                extra={"cookies_file": settings.YOUTUBE_COOKIES_FILE},
+            )
+    elif settings.YOUTUBE_COOKIES_BROWSER:
+        ydl_opts["cookiesfrombrowser"] = (settings.YOUTUBE_COOKIES_BROWSER,)
+        logger.info(
+            "Using browser cookies for YouTube download",
+            extra={"browser": settings.YOUTUBE_COOKIES_BROWSER},
+        )
+
+
+def _build_ydl_options(output_template: Path, max_file_size: int) -> dict[str, object]:
+    ydl_opts: dict[str, object] = {
         "format": "bestvideo[height<=720]+bestaudio/best",
         "merge_output_format": "mp4",
         "outtmpl": str(output_template),
@@ -168,38 +174,68 @@ def download_video_and_transcript(video_id: int, source_url: str) -> DownloadRes
             }
         ],
     }
+    _apply_cookie_auth(ydl_opts)
+    return ydl_opts
 
+
+def _attach_bearer_token(ydl_opts: dict[str, object], access_token: str | None) -> None:
+    if not access_token:
+        return
+    headers = ydl_opts.setdefault("http_headers", {})
+    if isinstance(headers, dict):
+        headers["Authorization"] = f"Bearer {access_token}"
+
+
+def _ensure_final_file(storage_dir: Path, final_output_path: Path) -> None:
+    if final_output_path.exists():
+        return
+    for candidate in storage_dir.glob("source.*"):
+        if candidate != final_output_path:
+            candidate.rename(final_output_path)
+            break
+
+
+def _cleanup_partial_file(final_output_path: Path) -> None:
+    if final_output_path.exists():
+        final_output_path.unlink()
+
+
+@dataclass(slots=True)
+class _DownloadContext:
+    video_id: int
+    source_url: str
+    storage_dir: Path
+    final_output_path: Path
+    max_file_size: int
+
+
+def _execute_download(
+    *,
+    context: _DownloadContext,
+    ydl_opts: dict[str, object],
+) -> tuple[int, int]:
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             logger.info(
                 "Starting video download",
-                extra={"video_id": video_id, "source_url": source_url},
+                extra={"video_id": context.video_id, "source_url": context.source_url},
             )
 
-            # Download video
-            info = ydl.extract_info(source_url, download=True)
-
+            info: dict[str, Any] | None = ydl.extract_info(context.source_url, download=True)
             if not info:
                 raise DownloadError("Failed to extract video information")
 
             duration = int(info.get("duration", 0))
+            _ensure_final_file(context.storage_dir, context.final_output_path)
 
-            # Ensure the final mp4 exists (postprocessing may rename files)
-            if not final_output_path.exists():
-                # If yt-dlp emitted another extension (e.g., .mkv) convert it manually
-                for candidate in storage_dir.glob("source.*"):
-                    if candidate != final_output_path:
-                        candidate.rename(final_output_path)
-                        break
+            if not context.final_output_path.exists():
+                raise DownloadError(
+                    f"Download completed but file not found at {context.final_output_path}"
+                )
 
-            if not final_output_path.exists():
-                raise DownloadError(f"Download completed but file not found at {final_output_path}")
-
-            file_size = final_output_path.stat().st_size
-
-            if file_size > max_file_size:
-                # Clean up the file
-                final_output_path.unlink()
+            file_size = context.final_output_path.stat().st_size
+            if file_size > context.max_file_size:
+                _cleanup_partial_file(context.final_output_path)
                 raise VideoTooLargeError(
                     f"Video size ({file_size / 1024 / 1024:.1f} MB) "
                     f"exceeds limit ({settings.MAX_VIDEO_FILE_SIZE_MB} MB)"
@@ -208,44 +244,72 @@ def download_video_and_transcript(video_id: int, source_url: str) -> DownloadRes
             logger.info(
                 "Video downloaded successfully",
                 extra={
-                    "video_id": video_id,
+                    "video_id": context.video_id,
                     "file_size_mb": file_size / 1024 / 1024,
                     "duration_seconds": duration,
                 },
             )
+            return file_size, duration
 
     except yt_dlp.utils.DownloadError as exc:
         logger.exception(
             "yt-dlp download failed",
-            extra={"video_id": video_id, "source_url": source_url, "error": str(exc)},
+            extra={
+                "video_id": context.video_id,
+                "source_url": context.source_url,
+                "error": str(exc),
+            },
         )
-        # Clean up partial download
-        if final_output_path.exists():
-            final_output_path.unlink()
+        _cleanup_partial_file(context.final_output_path)
         raise DownloadError(f"Video download failed: {exc}") from exc
-
     except Exception as exc:
         logger.exception(
             "Unexpected error during download",
-            extra={"video_id": video_id, "source_url": source_url, "error": str(exc)},
+            extra={
+                "video_id": context.video_id,
+                "source_url": context.source_url,
+                "error": str(exc),
+            },
         )
-        # Clean up partial download
-        if final_output_path.exists():
-            final_output_path.unlink()
+        _cleanup_partial_file(context.final_output_path)
         raise DownloadError(f"Unexpected download error: {exc}") from exc
 
-    # Fetch transcript
-    transcript_language = None
+
+def _safe_transcript_lookup(source_url: str) -> tuple[str | None, str | None]:
     try:
         yt_video_id = _extract_video_id(source_url)
-        transcript, transcript_language = _fetch_transcript(yt_video_id)
+        return _fetch_transcript(yt_video_id)
     except Exception as exc:
         logger.warning(
             "Failed to fetch transcript, continuing without it",
-            extra={"video_id": video_id, "error": str(exc)},
+            extra={"source_url": source_url, "error": str(exc)},
         )
-        transcript = None
+        return None, None
 
+
+def download_video_and_transcript(
+    video_id: int, source_url: str, *, access_token: str | None = None
+) -> DownloadResult:  # pragma: no cover - exercises external downloads
+    """
+    Download YouTube video and transcript.
+
+    Args:
+        video_id: Database video ID for organizing storage
+        source_url: YouTube video URL
+    """
+    storage_dir, output_template, final_output_path = _prepare_storage_paths(video_id)
+    max_file_size = settings.MAX_VIDEO_FILE_SIZE_MB * 1024 * 1024
+    ydl_opts = _build_ydl_options(output_template, max_file_size)
+    _attach_bearer_token(ydl_opts, access_token)
+    context = _DownloadContext(
+        video_id=video_id,
+        source_url=source_url,
+        storage_dir=storage_dir,
+        final_output_path=final_output_path,
+        max_file_size=max_file_size,
+    )
+    file_size, duration = _execute_download(context=context, ydl_opts=ydl_opts)
+    transcript, transcript_language = _safe_transcript_lookup(source_url)
     return DownloadResult(
         local_path=str(final_output_path),
         file_size_bytes=file_size,

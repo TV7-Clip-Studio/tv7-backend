@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import urlparse
 
-from app.db.models import Clip, ClipStatus, Video, VideoStatus
+from app.db.models import Clip, ClipGenerationMode, ClipStatus, Video, VideoStatus
 from app.repositories.videos import VideoRepository
 from app.services.ingest import enqueue_video
 
@@ -68,6 +68,8 @@ async def ingest_video(
     youtube_url: str,
     repo: VideoRepository,
     *,
+    requested_by_user_id: int | None = None,
+    clip_mode: ClipGenerationMode = ClipGenerationMode.REPLACE,
     task_dispatcher: Callable[[int, str], Awaitable[None]] | None = None,
 ) -> VideoIngestionResult:
     parsed = urlparse(youtube_url)
@@ -84,11 +86,19 @@ async def ingest_video(
             extra={"video_id": video.id, "source_url": video.source_url},
         )
     else:
-        video = Video(source_url=youtube_url, status=VideoStatus.INGESTED.value)
+        video = Video(
+            source_url=youtube_url,
+            status=VideoStatus.INGESTED.value,
+            requested_by_user_id=requested_by_user_id,
+            clip_generation_mode=clip_mode.value,
+        )
         await repo.add(video)
         video = await repo.refresh(video)
         created = True
         logger.info("Created new video record", extra={"video_id": video.id})
+    video.clip_generation_mode = clip_mode.value
+    if requested_by_user_id and video.requested_by_user_id is None:
+        video.requested_by_user_id = requested_by_user_id
 
     # Ensure the new/updated video is visible to other sessions (inline pipeline, workers)
     await repo.commit()

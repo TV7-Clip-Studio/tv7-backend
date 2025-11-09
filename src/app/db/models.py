@@ -23,9 +23,11 @@ __all__ = [
     "UserOAuthAccount",
     "Video",
     "Clip",
+    "YouTubeCredential",
     "VideoStatus",
     "ClipStatus",
     "AuthProvider",
+    "ClipGenerationMode",
 ]
 
 
@@ -49,6 +51,11 @@ class AuthProvider(str, Enum):
     GOOGLE = "google"
 
 
+class ClipGenerationMode(str, Enum):
+    REPLACE = "replace"
+    APPEND = "append"
+
+
 class User(Base):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -70,6 +77,11 @@ class User(Base):
     )
     oauth_accounts: Mapped[list[UserOAuthAccount]] = relationship(
         back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    youtube_credential: Mapped[YouTubeCredential | None] = relationship(
+        back_populates="user",
+        uselist=False,
         cascade="all, delete-orphan",
     )
 
@@ -110,6 +122,12 @@ class Video(Base):
     local_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     transcript_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     transcript_language: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    requested_by_user_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     file_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -118,6 +136,12 @@ class Video(Base):
         nullable=False,
         default=VideoStatus.INGESTED.value,
         server_default=VideoStatus.INGESTED.value,
+    )
+    clip_generation_mode: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default=ClipGenerationMode.REPLACE.value,
+        server_default=ClipGenerationMode.REPLACE.value,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -130,6 +154,7 @@ class Video(Base):
         back_populates="video",
         cascade="all, delete-orphan",
     )
+    requested_by: Mapped[User | None] = relationship(foreign_keys=[requested_by_user_id])
 
 
 class Clip(Base):
@@ -160,3 +185,28 @@ class Clip(Base):
     )
 
     video: Mapped[Video] = relationship(back_populates="clips")
+
+
+class YouTubeCredential(Base):
+    __tablename__ = "youtube_credentials"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    access_token: Mapped[str] = mapped_column(String(2048), nullable=False)
+    refresh_token: Mapped[str] = mapped_column(String(2048), nullable=False)
+    token_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    scope: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    user: Mapped[User] = relationship(back_populates="youtube_credential")

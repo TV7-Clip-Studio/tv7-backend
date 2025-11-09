@@ -96,7 +96,7 @@ Respond ONLY with valid JSON in this exact format:
 }"""
 
 
-async def detect_highlights(
+async def detect_highlights(  # pragma: no cover - relies on external OpenAI calls
     transcript: str,
     duration_seconds: int,
     video_id: int,

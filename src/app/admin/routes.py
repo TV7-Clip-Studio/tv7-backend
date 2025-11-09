@@ -1,19 +1,30 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
+from urllib.parse import quote_plus
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.jwt import JWTDecodeError, TokenType
-from app.db.models import User
-from app.deps.db import get_user_repository, get_video_repository
+from app.db.models import ClipGenerationMode, User
+from app.deps.db import (
+    get_user_repository,
+    get_video_repository,
+    get_youtube_credential_repository,
+)
 from app.repositories.users import UserRepository
 from app.repositories.videos import VideoRepository
+from app.repositories.youtube_credentials import (
+    CredentialTokenData,
+    YouTubeCredentialRepository,
+)
 from app.schemas import VideoRead
 from app.services.auth import (
     InvalidCredentialsError,
@@ -32,13 +43,26 @@ from app.services.users import (
     get_user_detail as get_user_detail_service,
 )
 from app.services.videos import InvalidYouTubeURL, get_video_detail, ingest_video, list_videos
+from app.services.youtube_oauth import (
+    build_authorization_url,
+    build_state_token,
+    exchange_code_for_tokens,
+    parse_state_token,
+)
 
 SESSION_COOKIE_NAME = "admin_session"
+YOUTUBE_STATE_COOKIE = "youtube_oauth_state"
 
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+class YouTubeCallbackParams(BaseModel):
+    state: str | None = None
+    code: str | None = None
+    error: str | None = None
 
 
 def _cookie_settings() -> dict[str, Any]:
@@ -54,6 +78,34 @@ def _cookie_settings() -> dict[str, Any]:
     }
 
 
+def _oauth_cookie_settings() -> dict[str, Any]:
+    secure_default = not settings.DEBUG
+    return {
+        "httponly": True,
+        "secure": secure_default,
+        "samesite": "lax",
+        "max_age": 600,
+        "path": "/",
+    }
+
+
+def _youtube_oauth_configured() -> bool:
+    return bool(
+        settings.YOUTUBE_CLIENT_ID
+        and settings.YOUTUBE_CLIENT_SECRET
+        and settings.YOUTUBE_REDIRECT_URI
+    )
+
+
+def _redirect_with_message(
+    path: str, message: str | None = None, *, error: bool = False
+) -> RedirectResponse:
+    if message:
+        key = "error" if error else "flash"
+        path = f"{path}?{key}={quote_plus(message)}"
+    return RedirectResponse(url=path, status_code=status.HTTP_303_SEE_OTHER)
+
+
 async def _current_admin_user(
     request: Request,
     repo: UserRepository,
@@ -65,6 +117,64 @@ async def _current_admin_user(
         return await resolve_user_from_token(token, repo, expected_type=TokenType.ACCESS)
     except (HTTPException, JWTDecodeError):
         return None
+
+
+async def _youtube_connected(user_id: int, credential_repo: YouTubeCredentialRepository) -> bool:
+    credential = await credential_repo.get_by_user_id(user_id)
+    return credential is not None
+
+
+def _error_result(message: str) -> _CallbackResult:
+    return _CallbackResult(message=message, error=True)
+
+
+async def _process_youtube_callback(
+    params: YouTubeCallbackParams,
+    *,
+    stored_state: str | None,
+    user_repo: UserRepository,
+    credential_repo: YouTubeCredentialRepository,
+) -> _CallbackResult:
+    try:
+        if params.error:
+            raise _CallbackError(f"YouTube authentication failed: {params.error}")
+        if not params.state or not stored_state:
+            raise _CallbackError("Missing OAuth state.")
+
+        parsed = parse_state_token(params.state)
+        if not parsed:
+            raise _CallbackError("Invalid OAuth state.")
+
+        user_id, provided_secret = parsed
+        if provided_secret != stored_state:
+            raise _CallbackError("OAuth state mismatch.")
+
+        user = await user_repo.get_by_id(user_id)
+        if not user:
+            raise _CallbackError("User not found for OAuth callback.")
+
+        if not params.code:
+            raise _CallbackError("Authorization code missing.")
+
+        tokens = await exchange_code_for_tokens(params.code)
+
+        if not tokens.refresh_token:
+            raise _CallbackError("Google did not provide a refresh token. Please try again.")
+
+        expires_at = datetime.now(tz=UTC) + timedelta(seconds=tokens.expires_in)
+        token_data = CredentialTokenData(
+            access_token=tokens.access_token,
+            refresh_token=tokens.refresh_token,
+            expires_at=expires_at,
+            scope=tokens.scope,
+            token_type=tokens.token_type,
+        )
+        await credential_repo.upsert(user_id=user.id, data=token_data)
+        return _CallbackResult("YouTube account connected.")
+    except _CallbackError as exc:
+        return _error_result(exc.message)
+    except Exception as exc:  # pragma: no cover - network errors
+        return _error_result(f"Failed to exchange code: {exc}")
 
 
 @router.get("/login", response_class=HTMLResponse)
@@ -113,11 +223,62 @@ async def logout() -> Response:
     return response
 
 
+@router.get("/youtube/connect")
+async def youtube_connect(
+    request: Request,
+    user_repo: UserRepository = Depends(get_user_repository),
+) -> Response:
+    user = await _current_admin_user(request, user_repo)
+    if not user:
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
+    if not _youtube_oauth_configured():
+        return _redirect_with_message(
+            "/admin/videos", "YouTube OAuth is not configured.", error=True
+        )
+    state, secret = build_state_token(user.id)
+    auth_url = build_authorization_url(state)
+    response = RedirectResponse(url=auth_url, status_code=status.HTTP_303_SEE_OTHER)
+    response.set_cookie(YOUTUBE_STATE_COOKIE, secret, **_oauth_cookie_settings())
+    return response
+
+
+@router.get("/youtube/callback")
+async def youtube_callback(
+    request: Request,
+    params: Annotated[YouTubeCallbackParams, Depends()],
+    user_repo: UserRepository = Depends(get_user_repository),
+    credential_repo: YouTubeCredentialRepository = Depends(get_youtube_credential_repository),
+) -> Response:
+    result = await _process_youtube_callback(
+        params,
+        stored_state=request.cookies.get(YOUTUBE_STATE_COOKIE),
+        user_repo=user_repo,
+        credential_repo=credential_repo,
+    )
+    response = _redirect_with_message("/admin/videos", result.message, error=result.error)
+    response.delete_cookie(YOUTUBE_STATE_COOKIE, path="/")
+    return response
+
+
+@router.post("/youtube/disconnect")
+async def youtube_disconnect(
+    request: Request,
+    user_repo: UserRepository = Depends(get_user_repository),
+    credential_repo: YouTubeCredentialRepository = Depends(get_youtube_credential_repository),
+) -> Response:
+    user = await _current_admin_user(request, user_repo)
+    if not user:
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
+    await credential_repo.delete_for_user(user.id)
+    return _redirect_with_message("/admin/videos", "YouTube account disconnected.")
+
+
 @router.get("/videos", response_class=HTMLResponse)
 async def videos_dashboard(
     request: Request,
     video_repo: VideoRepository = Depends(get_video_repository),
     user_repo: UserRepository = Depends(get_user_repository),
+    credential_repo: YouTubeCredentialRepository = Depends(get_youtube_credential_repository),
 ) -> Response:
     user = await _current_admin_user(request, user_repo)
     if not user:
@@ -125,11 +286,18 @@ async def videos_dashboard(
 
     videos = await list_videos(video_repo)
     flash = request.query_params.get("flash")
+    error = request.query_params.get("error")
+    youtube_connected = (
+        await _youtube_connected(user.id, credential_repo) if _youtube_oauth_configured() else False
+    )
     context = {
         "request": request,
         "user": user,
         "videos": videos,
         "flash": flash,
+        "error": error,
+        "youtube_connected": youtube_connected,
+        "youtube_oauth_configured": _youtube_oauth_configured(),
     }
     return templates.TemplateResponse(request, "admin/videos.html", context)
 
@@ -140,6 +308,7 @@ async def video_detail(
     video_id: int,
     video_repo: VideoRepository = Depends(get_video_repository),
     user_repo: UserRepository = Depends(get_user_repository),
+    credential_repo: YouTubeCredentialRepository = Depends(get_youtube_credential_repository),
 ) -> Response:
     user = await _current_admin_user(request, user_repo)
     if not user:
@@ -149,11 +318,16 @@ async def video_detail(
     if not entry:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found")
 
+    youtube_connected = (
+        await _youtube_connected(user.id, credential_repo) if _youtube_oauth_configured() else False
+    )
     context = {
         "request": request,
         "user": user,
         "video": entry.video,
         "clip_summary": entry.clips,
+        "youtube_connected": youtube_connected,
+        "youtube_oauth_configured": _youtube_oauth_configured(),
     }
     return templates.TemplateResponse(request, "admin/video_detail.html", context)
 
@@ -189,7 +363,7 @@ async def ingest_from_dashboard(
         return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
 
     try:
-        await ingest_video(youtube_url, video_repo)
+        await ingest_video(youtube_url, video_repo, requested_by_user_id=user.id)
     except InvalidYouTubeURL as exc:
         videos = await list_videos(video_repo)
         context = {
@@ -229,6 +403,32 @@ async def delete_video(
     return RedirectResponse(
         url="/admin/videos?flash=Video deleted successfully",
         status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@router.post("/videos/{video_id}/more-highlights")
+async def request_more_highlights(
+    request: Request,
+    video_id: int,
+    video_repo: VideoRepository = Depends(get_video_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+) -> Response:
+    user = await _current_admin_user(request, user_repo)
+    if not user:
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    video = await video_repo.get(video_id)
+    if not video:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found")
+
+    await ingest_video(
+        video.source_url,
+        video_repo,
+        requested_by_user_id=user.id,
+        clip_mode=ClipGenerationMode.APPEND,
+    )
+    return _redirect_with_message(
+        f"/admin/videos/{video_id}", "Requested additional highlights. Queueing now."
     )
 
 
@@ -323,3 +523,15 @@ async def delete_user_endpoint(
         )
     except UserNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found") from exc
+
+
+@dataclass(slots=True)
+class _CallbackResult:
+    message: str
+    error: bool = False
+
+
+class _CallbackError(RuntimeError):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message

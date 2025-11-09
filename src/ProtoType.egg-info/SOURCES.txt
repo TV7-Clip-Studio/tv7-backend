@@ -32,6 +32,7 @@ src/app/repositories/__init__.py
 src/app/repositories/clips.py
 src/app/repositories/users.py
 src/app/repositories/videos.py
+src/app/repositories/youtube_credentials.py
 src/app/services/__init__.py
 src/app/services/ai.py
 src/app/services/auth.py
@@ -42,6 +43,7 @@ src/app/services/tasks.py
 src/app/services/users.py
 src/app/services/videos.py
 src/app/services/youtube_downloader.py
+src/app/services/youtube_oauth.py
 tests/test_admin_auth.py
 tests/test_admin_credentials.py
 tests/test_ai_api.py
@@ -58,3 +60,4 @@ tests/test_video_ingest_api.py
 tests/test_video_models.py
 tests/test_videos_service.py
 tests/test_youtube_downloader.py
+tests/test_youtube_oauth.py

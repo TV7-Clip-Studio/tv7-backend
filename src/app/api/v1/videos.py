@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, HttpUrl
 
-from app.db.models import VideoStatus
+from app.db.models import ClipGenerationMode, VideoStatus
 from app.deps.db import get_video_repository
 from app.repositories.videos import VideoRepository
 from app.schemas import VideoRead
@@ -18,6 +18,7 @@ router = APIRouter()
 
 class VideoIngestRequest(BaseModel):
     youtube_url: HttpUrl
+    append_clips: bool = False
 
 
 class VideoIngestResponse(BaseModel):
@@ -32,7 +33,12 @@ async def ingest_video_endpoint(
     repo: VideoRepository = Depends(get_video_repository),
 ) -> VideoIngestResponse:
     try:
-        result = await ingest_video_service(str(payload.youtube_url), repo=repo)
+        mode = ClipGenerationMode.APPEND if payload.append_clips else ClipGenerationMode.REPLACE
+        result = await ingest_video_service(
+            str(payload.youtube_url),
+            repo=repo,
+            clip_mode=mode,
+        )
     except InvalidYouTubeURL as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -54,8 +60,10 @@ def _serialize_response(result: VideoIngestionResult) -> VideoIngestResponse:
         file_size_bytes=video.file_size_bytes,
         error_message=video.error_message,
         status=VideoStatus(video.status),
+        clip_generation_mode=ClipGenerationMode(video.clip_generation_mode),
         created_at=video.created_at,
         updated_at=video.updated_at,
+        requested_by_user_id=video.requested_by_user_id,
         clips=[],
     )
     return VideoIngestResponse(video=video_schema, queued=result.queued, created=result.created)

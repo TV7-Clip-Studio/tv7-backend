@@ -192,6 +192,10 @@ docker system prune                # Clean up unused Docker resources
   - `API_HOST` (defaults to `127.0.0.1`).
   - `API_PORT` (defaults to `8000`).
   Set `API_PORT` per checkout when running multiple instances; Docker Compose inherits it automatically.
+- YouTube download authentication:
+  - `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REDIRECT_URI` configure Google OAuth.
+  - `YOUTUBE_OAUTH_SCOPES` controls requested scopes (defaults to `youtube.readonly`).
+  - Optional `YOUTUBE_COOKIES_FILE` / `YOUTUBE_COOKIES_BROWSER` values fall back to cookie-based auth when OAuth is not configured.
 - Host-port overrides for Docker Compose instances:
   - `POSTGRES_PORT` (defaults to `5432`).
   - `REDIS_PORT` (defaults to `6379`).
@@ -201,6 +205,19 @@ docker system prune                # Clean up unused Docker resources
   - `JWT_ACCESS_TOKEN_EXPIRES_MINUTES` / `JWT_REFRESH_TOKEN_EXPIRES_MINUTES` control expiry windows.
 
 ### Authentication
+
+#### Connecting a YouTube account (admin dashboard)
+
+Age-restricted / “confirm you’re not a bot” videos require an authenticated YouTube session. Each operator can connect their account via OAuth:
+
+1. Configure the environment:
+   - `YOUTUBE_CLIENT_ID` / `YOUTUBE_CLIENT_SECRET` from the Google Cloud console.
+   - `YOUTUBE_REDIRECT_URI` must match the admin callback (e.g., `http://127.0.0.1:8000/admin/youtube/callback` locally or `https://<your-domain>/admin/youtube/callback` in Fly).
+2. Restart the API so the new settings load.
+3. In the admin dashboard, click **Connect YouTube** (above the ingest form) and follow Google’s consent screen.
+4. Once connected, downloads run “on behalf of” that user and tokens refresh automatically. Use **Disconnect** to revoke access.
+
+When OAuth isn’t configured, the dashboard prompts operators to connect using cookies instead.
 
 Use `/api/v1/auth/login` to obtain an access token (`Authorization: Bearer <token>`). Protected routes (users, videos, ai) require this header. The Swagger UI persists the token via the standard “Authorize” dialog—paste the bearer token once and all subsequent calls are authenticated. Refresh tokens are issued alongside access tokens; exchange them via `/api/v1/auth/refresh` when needed.
 
@@ -277,7 +294,7 @@ fly scale count 1 -a forgotten-app
 
 ### Managed Postgres (Neon)
 
-We host production/staging Postgres on Neon. The full setup guide—covering pooler vs. direct endpoints, environment variables, Fly secrets, and migration commands—lives in `docs/neon_postgres.md`. Consult that document when provisioning or rotating credentials.
+We host production/staging Postgres on Neon. The full setup guide—covering pooler vs. direct endpoints, environment variables, Fly secrets, and migration commands—lives in [docs/setup/neon_postgres.md](docs/setup/neon_postgres.md). Consult that document when provisioning or rotating credentials.
 
 ## Testing
 
@@ -392,4 +409,4 @@ pytest tests/test_tasks.py --cov=app.services.tasks --cov-report=term-missing
 3. Press `F5` → Select "pytest: Current file"
 4. Or use the Testing panel (flask icon) to run/debug individual tests
 
-See `docs/testing.md` for an overview of test architecture and where to place new scenarios.
+See [docs/guides/testing.md](docs/guides/testing.md) for an overview of test architecture and where to place new scenarios.

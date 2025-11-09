@@ -86,3 +86,23 @@ async def test_ingest_rejects_non_youtube(
         headers=auth_headers,
     )
     assert response.status_code == 422
+
+
+async def test_ingest_append_flag_sets_mode(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    auth_headers: dict[str, str],
+) -> None:
+    with patch("app.services.videos.enqueue_video", new=AsyncMock()):
+        response = await async_client.post(
+            "/api/v1/videos/ingest",
+            json={
+                "youtube_url": "https://www.youtube.com/watch?v=append123",
+                "append_clips": True,
+            },
+            headers=auth_headers,
+        )
+    assert response.status_code == 202
+    video_id = response.json()["video"]["id"]
+    stored = (await db_session.execute(select(Video).where(Video.id == video_id))).scalar_one()
+    assert stored.clip_generation_mode == "append"

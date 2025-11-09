@@ -5,9 +5,11 @@ import logging
 from collections.abc import Coroutine
 
 from dramatiq import actor
+from sqlalchemy import delete
 
 from app.db.base import session_scope
-from app.db.models import Clip, ClipStatus, Video, VideoStatus
+from app.db.models import Clip, ClipGenerationMode, ClipStatus, Video, VideoStatus
+from app.repositories.youtube_credentials import YouTubeCredentialRepository
 from app.services.highlight_detector import HighlightDetectionError
 from app.services.highlight_detector import detect_highlights as detect_highlights_service
 from app.services.queue import ensure_broker
@@ -16,6 +18,7 @@ from app.services.youtube_downloader import (
     VideoTooLargeError,
     download_video_and_transcript,
 )
+from app.services.youtube_oauth import get_valid_access_token
 
 logger = logging.getLogger(__name__)
 
@@ -75,9 +78,38 @@ async def _download_video_task(video_id: int) -> None:
             logger.error("Video not found for download", extra={"video_id": video_id})
             return
 
+        access_token: str | None = None
+        if video.requested_by_user_id:
+            credential_repo = YouTubeCredentialRepository(session)
+            try:
+                access_token = await get_valid_access_token(
+                    video.requested_by_user_id, credential_repo
+                )
+            except Exception as exc:  # pragma: no cover - network errors
+                logger.warning(
+                    "Failed to refresh YouTube access token",
+                    extra={"video_id": video_id, "error": str(exc)},
+                )
+
         try:
+            append_mode = video.clip_generation_mode == ClipGenerationMode.APPEND.value
+            if (
+                append_mode
+                and video.local_path
+                and video.transcript_text
+                and video.duration_seconds
+            ):
+                logger.info(
+                    "Skipping video download; reusing cached assets",
+                    extra={"video_id": video_id},
+                )
+                return
             # Download video and transcript
-            result = download_video_and_transcript(video_id, video.source_url)
+            result = download_video_and_transcript(
+                video_id,
+                video.source_url,
+                access_token=access_token,
+            )
 
             # Update video with download results
             video.local_path = result.local_path
@@ -166,6 +198,10 @@ async def _detect_highlights_task(video_id: int) -> None:
             if not video.duration_seconds:
                 raise HighlightDetectionError("Video duration not available")
 
+            append_mode = video.clip_generation_mode == ClipGenerationMode.APPEND.value
+            if not append_mode:
+                await session.execute(delete(Clip).where(Clip.video_id == video_id))
+
             # Call LLM to detect highlights
             segments = await detect_highlights_service(
                 transcript=video.transcript_text,
@@ -185,6 +221,7 @@ async def _detect_highlights_task(video_id: int) -> None:
                 )
                 session.add(clip)
 
+            video.clip_generation_mode = ClipGenerationMode.REPLACE.value
             await session.flush()
 
             logger.info(
@@ -199,6 +236,7 @@ async def _detect_highlights_task(video_id: int) -> None:
             )
             video.status = VideoStatus.ERROR.value
             video.error_message = f"Highlight detection failed: {exc}"
+            video.clip_generation_mode = ClipGenerationMode.REPLACE.value
             await session.flush()
 
         except Exception as exc:
@@ -208,6 +246,7 @@ async def _detect_highlights_task(video_id: int) -> None:
             )
             video.status = VideoStatus.ERROR.value
             video.error_message = f"Unexpected error during highlight detection: {exc}"
+            video.clip_generation_mode = ClipGenerationMode.REPLACE.value
             await session.flush()
 
 
