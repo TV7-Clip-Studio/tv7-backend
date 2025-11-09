@@ -289,10 +289,15 @@ make testcov
 # Run integration tests (requires Docker)
 make test-integration
 
+# Run entire suite sequentially (non-UI + UI)
+make test-suite
+
 # Run pipeline regression tests
 make pipeline-smoke
 
-# Run UI browser tests (requires running app)
+# Run UI browser test (Playwright, honors PWHEADLESS/PWSLOWMO)
+make test-ui
+# Run full Playwright suite
 make ui-smoke
 ```
 
@@ -338,14 +343,27 @@ make pipeline-smoke
 ```bash
 # Start the app first
 make up DETACH=1
-# Set credentials and run
+# Single interactive flow (default headless)
+make test-ui
+# Slow-mo run for debugging
+make test-ui-visual
+# Full Playwright suite
 make ui-smoke
 # or: UI_BASE_URL=http://localhost:8000 pytest -m ui tests/ui
 ```
 - Playwright browser automation
 - Requires running API server
 - Tests admin dashboard flows
+- `PWHEADLESS` (default `true`) and `PWSLOWMO` (default `0`) control browser visibility/speed
 - Set `DRAMATIQ_BROKER=stub` for instant status updates
+
+**Entire suite (non-UI + UI)**
+```bash
+make test-suite
+```
+- Runs every non-UI test with verbose output via `pytest -v`
+- Finishes with the interactive UI flow so regressions are easy to spot
+- Use `make test-ui-visual` or override `PWHEADLESS=false PWSLOWMO=500` for watchable runs
 
 ### Running Specific Tests
 

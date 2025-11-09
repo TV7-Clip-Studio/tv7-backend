@@ -46,6 +46,22 @@
   - UI: JavaScript confirmation dialog, disabled delete button for current user
 - **Important:** Hard delete operation (not soft delete). Consider future migration to soft delete with audit trail for compliance needs.
 
+### U.5 — Google OAuth Social Login 📋
+- **Status:** Planned
+- **Added:** 2025-11-07
+- **Implementation overview:** Add Google OAuth2 as an alternative authentication method while maintaining full backward compatibility with email/password login. Users can sign in with Google or traditional credentials.
+- **Components:**
+  - Database: Extend `User` model with `auth_provider`, `oauth_provider_id`, `picture_url` fields
+  - Migration: Make `password_hash` nullable, add OAuth tracking columns
+  - Service: New `oauth.py` service for OAuth flow (state validation, token exchange, user info)
+  - Service: Extend `users.py` with `get_or_create_oauth_user()` and account linking logic
+  - API routes: `GET /auth/google/login`, `GET /auth/google/callback`, `GET /auth/providers`
+  - Admin UI: Add "Sign in with Google" button to login page
+  - Config: Add `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `OAUTH_STATE_SECRET`
+  - Dependencies: Add `authlib>=1.3` for OAuth2/OIDC client
+- **Testing:** Unit tests for OAuth service, system tests for OAuth flow with mocked Google, integration tests for user creation/linking
+- **Important:** Account linking automatic when Google email matches existing email. CSRF protection via signed state parameter. Works alongside email/password (not a replacement).
+
 ## Future Off-Roadmap Candidates
 
 ### User Audit Trail
