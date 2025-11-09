@@ -73,6 +73,11 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    youtube_credential: Mapped[YouTubeCredential | None] = relationship(
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
 
 class UserOAuthAccount(Base):
@@ -101,12 +106,6 @@ class UserOAuthAccount(Base):
     )
 
     user: Mapped[User] = relationship(back_populates="oauth_accounts")
-
-    youtube_credential: Mapped[YouTubeCredential | None] = relationship(
-        back_populates="user",
-        uselist=False,
-        cascade="all, delete-orphan",
-    )
 
 
 class Video(Base):
