@@ -22,6 +22,8 @@ from app.services import tasks  # noqa: F401, E402
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
+logger.info("Registered actors: %s", ", ".join(sorted(broker.actors.keys())))
+logger.info("Declared queues: %s", ", ".join(sorted(broker.queues)) or "(none)")
 
 
 def main() -> None:

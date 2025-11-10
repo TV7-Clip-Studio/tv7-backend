@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from collections.abc import Coroutine
+from concurrent.futures import Future
+from typing import Any, TypeVar
 
 from dramatiq import actor
 from sqlalchemy import delete
@@ -12,7 +15,7 @@ from app.db.models import Clip, ClipGenerationMode, ClipStatus, Video, VideoStat
 from app.repositories.youtube_credentials import YouTubeCredentialRepository
 from app.services.highlight_detector import HighlightDetectionError
 from app.services.highlight_detector import detect_highlights as detect_highlights_service
-from app.services.queue import ensure_broker
+from app.services.queue import get_broker
 from app.services.youtube_downloader import (
     DownloadError,
     VideoTooLargeError,
@@ -21,15 +24,33 @@ from app.services.youtube_downloader import (
 from app.services.youtube_oauth import get_valid_access_token
 
 logger = logging.getLogger(__name__)
+_broker = get_broker()
+_loop_lock = threading.Lock()
+_worker_loop: asyncio.AbstractEventLoop | None = None
+T = TypeVar("T")
 
-# Ensure broker configured when module is imported.
-ensure_broker()
+
+def _ensure_worker_loop() -> asyncio.AbstractEventLoop:
+    global _worker_loop  # noqa: PLW0603
+    if _worker_loop is not None:
+        return _worker_loop
+    with _loop_lock:
+        if _worker_loop is None:
+            loop = asyncio.new_event_loop()
+            thread = threading.Thread(
+                target=loop.run_forever, name="dramatiq-worker-loop", daemon=True
+            )
+            thread.start()
+            _worker_loop = loop
+    return _worker_loop
 
 
-def _run_async(coro: Coroutine[None, None, None]) -> None:
-    """Execute an async coroutine in a fresh event loop."""
+def _run_async(coro: Coroutine[Any, Any, T]) -> T:
+    """Execute an async coroutine on the shared worker event loop."""
 
-    asyncio.run(coro)
+    loop = _ensure_worker_loop()
+    future: Future[T] = asyncio.run_coroutine_threadsafe(coro, loop)
+    return future.result()
 
 
 async def _set_video_status(video_id: int, status: VideoStatus) -> None:
@@ -61,7 +82,7 @@ async def _video_has_error(video_id: int) -> bool:
     return status == VideoStatus.ERROR
 
 
-@actor(max_retries=3)
+@actor(broker=_broker, max_retries=3)
 def process_video(video_id: int) -> None:
     """Entry point for the pipeline: mark video processing and kick off stages."""
 
@@ -159,7 +180,7 @@ async def _download_video_task(video_id: int) -> None:
             await session.flush()
 
 
-@actor(max_retries=3)
+@actor(broker=_broker, max_retries=3)
 def download_video(video_id: int) -> None:
     """Download YouTube video and transcript."""
 
@@ -173,7 +194,7 @@ def download_video(video_id: int) -> None:
             video = await session.get(Video, video_id)
             return video is not None and video.status != VideoStatus.ERROR.value
 
-    if asyncio.run(_should_continue()):
+    if _run_async(_should_continue()):
         detect_highlights.send(video_id)
     else:
         logger.warning(
@@ -250,7 +271,7 @@ async def _detect_highlights_task(video_id: int) -> None:
             await session.flush()
 
 
-@actor(max_retries=3)
+@actor(broker=_broker, max_retries=3)
 def detect_highlights(video_id: int) -> None:
     """Detect highlights using LLM and create Clip records."""
 
@@ -263,7 +284,7 @@ def detect_highlights(video_id: int) -> None:
             video = await session.get(Video, video_id)
             return video is not None and video.status != VideoStatus.ERROR.value
 
-    if asyncio.run(_should_continue()):
+    if _run_async(_should_continue()):
         finalize_video.send(video_id)
     else:
         logger.warning(
@@ -272,7 +293,7 @@ def detect_highlights(video_id: int) -> None:
         )
 
 
-@actor(max_retries=3)
+@actor(broker=_broker, max_retries=3)
 def finalize_video(video_id: int) -> None:
     """Complete the pipeline (stub) by marking the video ready."""
 

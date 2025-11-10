@@ -13,7 +13,11 @@
 {% endblock %}
 
 {% block content %}
-  <div id="video-detail" data-video-id="{{ video.id }}" data-status="{{ video.status }}" data-clips="{{ video.clips|length }}">
+  <div id="video-detail"
+       data-video-id="{{ video.id }}"
+       data-status="{{ video.status }}"
+       data-clips="{{ video.clips|length }}"
+       data-has-media="{{ 'true' if video.local_path else 'false' }}">
   <nav style="margin-bottom: 1.5rem;">
     <a href="/admin/videos" style="text-decoration: none; color: #94a3b8;">← Back to videos</a>
   </nav>
@@ -377,6 +381,14 @@
         }
       }
 
+      function scheduleReload() {
+        if (document.body.dataset.reloading === "true") {
+          return;
+        }
+        document.body.dataset.reloading = "true";
+        window.location.reload();
+      }
+
       async function poll() {
         try {
           const response = await fetch(`/admin/videos/${videoId}/status`, {
@@ -402,14 +414,22 @@
 
           currentStatus = data.status;
           currentClipCount = clipCount;
+          container.dataset.status = currentStatus;
+          container.dataset.clips = String(currentClipCount);
 
           if (statusChanged && terminalStatuses.has(data.status)) {
-            window.location.reload();
+            scheduleReload();
             return;
           }
 
-          if (clipsChanged || hasMedia) {
-            window.location.reload();
+          if (clipsChanged && clipCount > 0) {
+            scheduleReload();
+            return;
+          }
+
+          if (hasMedia && container.dataset.hasMedia !== "true") {
+            container.dataset.hasMedia = "true";
+            scheduleReload();
             return;
           }
         } catch (err) {
