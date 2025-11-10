@@ -24,6 +24,10 @@ class VideoTooLargeError(DownloadError):
     """Raised when video exceeds maximum file size."""
 
 
+class AuthenticationRequiredError(DownloadError):
+    """Raised when YouTube requires authentication (age-restricted or sign-in required)."""
+
+
 @dataclass(slots=True)
 class DownloadResult:
     """Result of downloading a YouTube video."""
@@ -178,12 +182,20 @@ def _build_ydl_options(output_template: Path, max_file_size: int) -> dict[str, o
     return ydl_opts
 
 
-def _attach_bearer_token(ydl_opts: dict[str, object], access_token: str | None) -> None:
-    if not access_token:
-        return
-    headers = ydl_opts.setdefault("http_headers", {})
-    if isinstance(headers, dict):
-        headers["Authorization"] = f"Bearer {access_token}"
+def _attach_bearer_token(_ydl_opts: dict[str, object], _access_token: str | None) -> None:
+    """
+    NOTE: YouTube OAuth tokens cannot be used for video downloads with yt-dlp.
+
+    YouTube Data API (OAuth) and YouTube video player (cookies) use separate auth systems.
+    OAuth tokens are for API operations (upload, manage), not for downloading videos.
+
+    yt-dlp requires browser session cookies for downloads. The OAuth connection in the
+    admin UI is for future features like uploading clips, not for downloading source videos.
+
+    This function is kept for documentation and potential future use with other platforms.
+    """
+    # OAuth bearer tokens don't work with yt-dlp for YouTube downloads
+    pass
 
 
 def _ensure_final_file(storage_dir: Path, final_output_path: Path) -> None:
@@ -252,15 +264,25 @@ def _execute_download(
             return file_size, duration
 
     except yt_dlp.utils.DownloadError as exc:
+        error_msg = str(exc)
         logger.exception(
             "yt-dlp download failed",
             extra={
                 "video_id": context.video_id,
                 "source_url": context.source_url,
-                "error": str(exc),
+                "error": error_msg,
             },
         )
         _cleanup_partial_file(context.final_output_path)
+
+        # Detect authentication errors (bot check, sign-in required)
+        if "Sign in to confirm" in error_msg or "cookies" in error_msg.lower():
+            raise AuthenticationRequiredError(
+                f"Video download failed: {exc}. "
+                "YouTube requires authentication. Export your browser cookies and upload to "
+                "YOUTUBE_COOKIES_B64 secret. See docs/setup/youtube_cookies_setup.md"
+            ) from exc
+
         raise DownloadError(f"Video download failed: {exc}") from exc
     except Exception as exc:
         logger.exception(
