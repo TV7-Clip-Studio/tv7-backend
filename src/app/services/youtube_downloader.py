@@ -159,7 +159,7 @@ def _apply_cookie_auth(ydl_opts: dict[str, object]) -> None:
 
 def _build_ydl_options(output_template: Path, max_file_size: int) -> dict[str, object]:
     ydl_opts: dict[str, object] = {
-        "format": "bestvideo[height<=720]+bestaudio/best",
+        "format": "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
         "merge_output_format": "mp4",
         "outtmpl": str(output_template),
         "quiet": True,
@@ -167,6 +167,10 @@ def _build_ydl_options(output_template: Path, max_file_size: int) -> dict[str, o
         "extract_flat": False,
         "max_filesize": max_file_size,
         "prefer_ffmpeg": True,
+        "writesubtitles": True,
+        "writeautomaticsub": True,
+        "subtitleslangs": PREFERRED_TRANSCRIPT_LANGS,
+        "skip_download": False,
         "postprocessors": [
             {
                 "key": "FFmpegVideoConvertor",
@@ -209,11 +213,41 @@ class _DownloadContext:
     max_file_size: int
 
 
+def _extract_transcript_from_info(info: dict[str, Any]) -> tuple[str | None, str | None]:
+    """Extract transcript from yt-dlp subtitle data."""
+    # Try subtitles (manual) first, then automatic_captions (auto-generated)
+    for sub_key in ["subtitles", "automatic_captions"]:
+        subs = info.get(sub_key, {})
+        if not subs:
+            continue
+
+        # Try preferred languages
+        for lang in PREFERRED_TRANSCRIPT_LANGS:
+            if lang in subs and subs[lang]:
+                # Get the first subtitle format available
+                sub_data = subs[lang][0] if isinstance(subs[lang], list) else subs[lang]
+                # yt-dlp subtitle data might have 'data' field with the text
+                if isinstance(sub_data, dict) and "data" in sub_data:
+                    text = sub_data["data"]
+                    if text:
+                        # Clean up subtitle formatting
+                        # Remove timestamps and formatting
+                        text = re.sub(
+                            r"\d{2}:\d{2}:\d{2}\.\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}\.\d{3}", "", text
+                        )
+                        text = re.sub(r"<[^>]+>", "", text)  # Remove HTML tags
+                        text = " ".join(text.split())  # Normalize whitespace
+                        logger.info(f"Extracted transcript from yt-dlp ({sub_key}, {lang})")
+                        return text.strip() or None, lang
+
+    return None, None
+
+
 def _execute_download(
     *,
     context: _DownloadContext,
     ydl_opts: dict[str, object],
-) -> tuple[int, int]:
+) -> tuple[int, int, str | None, str | None]:
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             logger.info(
@@ -226,6 +260,8 @@ def _execute_download(
                 raise DownloadError("Failed to extract video information")
 
             duration = int(info.get("duration", 0))
+            transcript_text, transcript_lang = _extract_transcript_from_info(info)
+
             _ensure_final_file(context.storage_dir, context.final_output_path)
 
             if not context.final_output_path.exists():
@@ -249,7 +285,7 @@ def _execute_download(
                     "duration_seconds": duration,
                 },
             )
-            return file_size, duration
+            return file_size, duration, transcript_text, transcript_lang
 
     except yt_dlp.utils.DownloadError as exc:
         logger.exception(
@@ -296,6 +332,7 @@ def download_video_and_transcript(
     Args:
         video_id: Database video ID for organizing storage
         source_url: YouTube video URL
+        access_token: Optional OAuth access token for authenticated downloads
     """
     storage_dir, output_template, final_output_path = _prepare_storage_paths(video_id)
     max_file_size = settings.MAX_VIDEO_FILE_SIZE_MB * 1024 * 1024
@@ -308,8 +345,15 @@ def download_video_and_transcript(
         final_output_path=final_output_path,
         max_file_size=max_file_size,
     )
-    file_size, duration = _execute_download(context=context, ydl_opts=ydl_opts)
-    transcript, transcript_language = _safe_transcript_lookup(source_url)
+    file_size, duration, transcript, transcript_language = _execute_download(
+        context=context, ydl_opts=ydl_opts
+    )
+
+    # Fallback to YouTube Transcript API if yt-dlp didn't extract transcript
+    if not transcript:
+        logger.info("No transcript from yt-dlp, trying YouTube Transcript API fallback")
+        transcript, transcript_language = _safe_transcript_lookup(source_url)
+
     return DownloadResult(
         local_path=str(final_output_path),
         file_size_bytes=file_size,
