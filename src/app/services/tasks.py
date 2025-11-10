@@ -45,7 +45,7 @@ def _ensure_worker_loop() -> asyncio.AbstractEventLoop:
     return _worker_loop
 
 
-def _run_async(coro: Coroutine[Any, Any, T]) -> T:
+def _run_async(coro: Coroutine[Any, Any, T]) -> T:  # noqa: UP047
     """Execute an async coroutine on the shared worker event loop."""
 
     loop = _ensure_worker_loop()
