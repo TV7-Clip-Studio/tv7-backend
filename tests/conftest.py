@@ -122,7 +122,8 @@ async def configure_app_database(
     def _get_stub_broker() -> StubBroker:
         return stub_broker
 
-    queue_module.get_broker.cache_clear()
+    # Reset the module-level broker singleton
+    queue_module._broker = None
     monkeypatch.setattr(queue_module, "get_broker", _get_stub_broker, raising=False)
     monkeypatch.setattr(queue_module, "ensure_broker", _get_stub_broker, raising=False)
 
