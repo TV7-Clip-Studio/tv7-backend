@@ -8,7 +8,11 @@ from threading import Event
 
 # IMPORTANT: Configure broker BEFORE importing tasks
 from app.core.config import settings
+from app.core.logging import setup_logging
 from app.services.queue import get_broker
+
+# Initialize structured logging before importing tasks so extra fields are emitted.
+setup_logging()
 
 # Set up broker first
 broker = get_broker()
@@ -20,7 +24,6 @@ from dramatiq import Worker  # noqa: E402
 
 from app.services import tasks  # noqa: F401, E402
 
-logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 logger.info("Registered actors: %s", ", ".join(sorted(broker.actors.keys())))
 logger.info("Declared queues: %s", ", ".join(sorted(broker.queues)) or "(none)")
