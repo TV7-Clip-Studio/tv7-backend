@@ -177,11 +177,10 @@
 
 ## Observability & Monitoring
 
-### structlog 24.1+
-- Structured logging library
-- JSON-formatted logs in production
-- Context-aware logging (request IDs, user IDs)
-- Configured in `app/core/logging.py`
+### JSON Logging (Python stdlib)
+- Custom JSON formatter built on Python's `logging` module (`app/core/logging.py`)
+- Includes timestamp, level, logger name, and any `extra={}` context (video IDs, clip IDs)
+- Used by both API and worker processes; safe to stream via `docker compose logs -f`
 
 ### prometheus-fastapi-instrumentator 7.0+
 - Automatic Prometheus metrics for FastAPI

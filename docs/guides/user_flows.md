@@ -433,7 +433,7 @@ Pipeline runs again
 ```
 Persistent failure
   ↓
-Check logs (structlog JSON output)
+Check logs (JSON-formatted logging output)
   ↓
 Fix issue (API key, network, etc.)
   ↓

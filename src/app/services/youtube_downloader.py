@@ -4,10 +4,14 @@ import logging
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
+from http import HTTPStatus
+from http.cookiejar import MozillaCookieJar
 from pathlib import Path
 from typing import Any, Protocol, cast
 
+import httpx
 import yt_dlp
+from requests import Session  # type: ignore[import]
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import TranscriptsDisabled, VideoUnavailable
 
@@ -22,6 +26,10 @@ class DownloadError(Exception):
 
 class VideoTooLargeError(DownloadError):
     """Raised when video exceeds maximum file size."""
+
+
+class AuthenticationRequiredError(DownloadError):
+    """Raised when YouTube requires authentication (age-restricted or sign-in required)."""
 
 
 @dataclass(slots=True)
@@ -59,6 +67,12 @@ class _Transcript(Protocol):
 
 
 PREFERRED_TRANSCRIPT_LANGS = ["en", "es", "pt", "fr", "de", "it", "ja", "ko"]
+CAPTIONS_API_URL = "https://www.googleapis.com/youtube/v3/captions"
+TRANSCRIPT_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
+)
+CAPTIONS_FORBIDDEN_STATUS = HTTPStatus.FORBIDDEN
 
 
 def _is_preferred_language(code: str | None) -> bool:
@@ -71,9 +85,20 @@ def _is_preferred_language(code: str | None) -> bool:
     )
 
 
-def _fetch_transcript(video_id: str) -> tuple[str | None, str | None]:
+def _fetch_transcript(
+    video_id: str, access_token: str | None = None
+) -> tuple[str | None, str | None]:
     """Fetch transcript text plus detected language for a YouTube video."""
-    api = YouTubeTranscriptApi()
+    if access_token:
+        text, language = _fetch_transcript_with_oauth(video_id, access_token)
+        if text:
+            return text, language
+        logger.info(
+            "OAuth transcript fetch unavailable; falling back to transcript API",
+            extra={"video_id": video_id},
+        )
+
+    api = _build_transcript_api()
     try:
         transcript_list = api.list(video_id)
         transcripts = cast(list[_Transcript], list(transcript_list))
@@ -178,12 +203,173 @@ def _build_ydl_options(output_template: Path, max_file_size: int) -> dict[str, o
     return ydl_opts
 
 
-def _attach_bearer_token(ydl_opts: dict[str, object], access_token: str | None) -> None:
-    if not access_token:
-        return
-    headers = ydl_opts.setdefault("http_headers", {})
-    if isinstance(headers, dict):
-        headers["Authorization"] = f"Bearer {access_token}"
+def _attach_bearer_token(_ydl_opts: dict[str, object], _access_token: str | None) -> None:
+    """
+    NOTE: YouTube OAuth tokens cannot be used for video downloads with yt-dlp.
+
+    YouTube Data API (OAuth) and YouTube video player (cookies) use separate auth systems.
+    OAuth tokens are for API operations (upload, manage), not for downloading videos.
+
+    yt-dlp requires browser session cookies for downloads. The OAuth connection in the
+    admin UI is for future features like uploading clips, not for downloading source videos.
+
+    This function is kept for documentation and potential future use with other platforms.
+    """
+    # OAuth bearer tokens don't work with yt-dlp for YouTube downloads
+    pass
+
+
+def _load_cookie_jar(path: Path) -> MozillaCookieJar | None:
+    jar = MozillaCookieJar()
+    try:
+        jar.load(str(path), ignore_discard=True, ignore_expires=True)
+        return jar
+    except FileNotFoundError:
+        logger.warning(
+            "Transcript cookies file not found",
+            extra={"cookies_file": str(path)},
+        )
+    except Exception as exc:  # pragma: no cover - depends on cookie contents
+        logger.warning(
+            "Failed to load transcript cookies",
+            extra={"cookies_file": str(path), "error": str(exc)},
+        )
+    return None
+
+
+def _build_transcript_http_client() -> Session | None:
+    cookies_file = settings.YOUTUBE_COOKIES_FILE
+    if not cookies_file:
+        return None
+
+    path = Path(cookies_file)
+    jar = _load_cookie_jar(path)
+    if jar is None:
+        return None
+
+    session = Session()
+    session.cookies.update(jar)
+    session.headers.setdefault("User-Agent", TRANSCRIPT_USER_AGENT)
+    logger.info(
+        "Using cookies file for YouTube transcript fetch",
+        extra={"cookies_file": str(path)},
+    )
+    return session
+
+
+def _build_transcript_api() -> YouTubeTranscriptApi:
+    http_client = _build_transcript_http_client()
+    return YouTubeTranscriptApi(http_client=http_client)
+
+
+def _fetch_transcript_from_captions_api(
+    video_id: str, access_token: str
+) -> tuple[str | None, str | None]:
+    headers = {"Authorization": f"Bearer {access_token}"}
+    params: dict[str, str] = {"part": "snippet", "videoId": video_id, "maxResults": "50"}
+    with httpx.Client(timeout=15) as client:
+        response = client.get(CAPTIONS_API_URL, params=params, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        items: list[dict[str, Any]] = data.get("items", [])
+        if not items:
+            return None, None
+
+        caption = _pick_caption_track(items)
+        if caption is None:
+            logger.warning(
+                "YouTube API returned no usable caption tracks",
+                extra={"video_id": video_id, "tracks": len(items)},
+            )
+            return None, None
+
+        caption_id = caption["id"]
+        snippet = caption.get("snippet", {})
+        logger.info(
+            "Selected caption track",
+            extra={
+                "video_id": video_id,
+                "caption_id": caption_id,
+                "language": snippet.get("language"),
+                "track_kind": snippet.get("trackKind"),
+            },
+        )
+        download = client.get(
+            f"{CAPTIONS_API_URL}/{caption_id}",
+            headers=headers,
+            params={"tfmt": "srt"},
+        )
+        download.raise_for_status()
+        text = _parse_srt(download.text)
+        language = snippet.get("language")
+        return (text or None, language)
+
+
+def _pick_caption_track(items: list[dict[str, Any]]) -> dict[str, Any] | None:
+    manual: list[tuple[str, dict[str, Any]]] = []
+    generated: list[tuple[str, dict[str, Any]]] = []
+
+    for item in items:
+        snippet = item.get("snippet", {})
+        lang = (snippet.get("language") or "").lower()
+        track_kind = (snippet.get("trackKind") or "").lower()
+        bucket = generated if track_kind == "asr" else manual
+        bucket.append((lang, item))
+
+    def _pick(bucket: list[tuple[str, dict[str, Any]]]) -> dict[str, Any] | None:
+        for preferred in PREFERRED_TRANSCRIPT_LANGS:
+            for lang, entry in bucket:
+                if lang == preferred or lang.startswith(f"{preferred}-"):
+                    return entry
+        return bucket[0][1] if bucket else None
+
+    return _pick(manual) or _pick(generated)
+
+
+def _parse_srt(payload: str) -> str:
+    lines: list[str] = []
+    for line in payload.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.isdigit() or "-->" in stripped:
+            continue
+        lines.append(stripped)
+    return " ".join(lines).strip()
+
+
+def _fetch_transcript_with_oauth(video_id: str, access_token: str) -> tuple[str | None, str | None]:
+    try:
+        logger.info(
+            "Fetching transcript via YouTube Data API",
+            extra={"video_id": video_id},
+        )
+        result = _fetch_transcript_from_captions_api(video_id, access_token)
+        logger.info(
+            "Transcript fetched via YouTube Data API",
+            extra={"video_id": video_id, "has_text": bool(result[0])},
+        )
+        return result
+    except httpx.HTTPStatusError as exc:
+        body_preview = exc.response.text[:300]
+        logger.warning(
+            "YouTube API transcript request failed",
+            extra={
+                "video_id": video_id,
+                "status_code": exc.response.status_code,
+                "body": body_preview,
+            },
+        )
+        if exc.response.status_code == CAPTIONS_FORBIDDEN_STATUS:
+            logger.warning(
+                "YouTube captions API returned 403. Ask the operator to reconnect their "
+                "YouTube account so the new captions scope is granted.",
+                extra={"video_id": video_id},
+            )
+    except Exception as exc:  # pragma: no cover - network errors
+        logger.warning(
+            "Unexpected error fetching transcript via OAuth",
+            extra={"video_id": video_id, "error": str(exc)},
+        )
+    return None, None
 
 
 def _ensure_final_file(storage_dir: Path, final_output_path: Path) -> None:
@@ -252,15 +438,25 @@ def _execute_download(
             return file_size, duration
 
     except yt_dlp.utils.DownloadError as exc:
+        error_msg = str(exc)
         logger.exception(
             "yt-dlp download failed",
             extra={
                 "video_id": context.video_id,
                 "source_url": context.source_url,
-                "error": str(exc),
+                "error": error_msg,
             },
         )
         _cleanup_partial_file(context.final_output_path)
+
+        # Detect authentication errors (bot check, sign-in required)
+        if "Sign in to confirm" in error_msg or "cookies" in error_msg.lower():
+            raise AuthenticationRequiredError(
+                f"Video download failed: {exc}. "
+                "YouTube requires authentication. Export your browser cookies and upload to "
+                "YOUTUBE_COOKIES_B64 secret. See docs/setup/youtube_cookies_setup.md"
+            ) from exc
+
         raise DownloadError(f"Video download failed: {exc}") from exc
     except Exception as exc:
         logger.exception(
@@ -275,10 +471,12 @@ def _execute_download(
         raise DownloadError(f"Unexpected download error: {exc}") from exc
 
 
-def _safe_transcript_lookup(source_url: str) -> tuple[str | None, str | None]:
+def _safe_transcript_lookup(
+    source_url: str, *, access_token: str | None = None
+) -> tuple[str | None, str | None]:
     try:
         yt_video_id = _extract_video_id(source_url)
-        return _fetch_transcript(yt_video_id)
+        return _fetch_transcript(yt_video_id, access_token=access_token)
     except Exception as exc:
         logger.warning(
             "Failed to fetch transcript, continuing without it",
@@ -288,7 +486,10 @@ def _safe_transcript_lookup(source_url: str) -> tuple[str | None, str | None]:
 
 
 def download_video_and_transcript(
-    video_id: int, source_url: str, *, access_token: str | None = None
+    video_id: int,
+    source_url: str,
+    *,
+    access_token: str | None = None,
 ) -> DownloadResult:  # pragma: no cover - exercises external downloads
     """
     Download YouTube video and transcript.
@@ -309,7 +510,15 @@ def download_video_and_transcript(
         max_file_size=max_file_size,
     )
     file_size, duration = _execute_download(context=context, ydl_opts=ydl_opts)
-    transcript, transcript_language = _safe_transcript_lookup(source_url)
+    transcript, transcript_language = _safe_transcript_lookup(source_url, access_token=access_token)
+    logger.info(
+        "Transcript lookup complete",
+        extra={
+            "video_id": video_id,
+            "has_transcript": bool(transcript),
+            "access_token_used": bool(access_token),
+        },
+    )
     return DownloadResult(
         local_path=str(final_output_path),
         file_size_bytes=file_size,

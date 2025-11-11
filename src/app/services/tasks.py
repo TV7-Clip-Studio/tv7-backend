@@ -5,9 +5,10 @@ import logging
 import threading
 from collections.abc import Coroutine
 from concurrent.futures import Future
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from dramatiq import actor
+from dramatiq.middleware import CurrentMessage
 from sqlalchemy import delete
 
 from app.db.base import session_scope
@@ -53,6 +54,16 @@ def _run_async(coro: Coroutine[Any, Any, T]) -> T:  # noqa: UP047
     return future.result()
 
 
+def _current_message_id(fallback: str = "unknown") -> str:
+    try:
+        current_message = CurrentMessage.get_current_message()
+        if current_message is None:
+            return fallback
+        return cast(str, current_message.message_id)
+    except Exception:
+        return fallback
+
+
 async def _set_video_status(video_id: int, status: VideoStatus) -> None:
     async with session_scope() as session:
         video = await session.get(Video, video_id)
@@ -83,10 +94,16 @@ async def _video_has_error(video_id: int) -> bool:
 
 
 @actor(broker=_broker, max_retries=3)
-def process_video(video_id: int) -> None:
+def process_video(video_id: int, message_id: str | None = None) -> None:
     """Entry point for the pipeline: mark video processing and kick off stages."""
 
-    logger.info("Process video", extra={"video_id": video_id})
+    # Get current message ID from Dramatiq context
+    msg_id = _current_message_id(message_id or "unknown")
+
+    logger.info(
+        "Process video",
+        extra={"video_id": video_id, "task_id": msg_id},
+    )
     _run_async(_set_video_status(video_id, VideoStatus.PROCESSING))
     download_video.send(video_id)
 
@@ -184,7 +201,12 @@ async def _download_video_task(video_id: int) -> None:
 def download_video(video_id: int) -> None:
     """Download YouTube video and transcript."""
 
-    logger.info("Starting video download", extra={"video_id": video_id})
+    msg_id = _current_message_id()
+
+    logger.info(
+        "Starting video download",
+        extra={"video_id": video_id, "task_id": msg_id},
+    )
     _run_async(_download_video_task(video_id))
 
     # Only continue to next stage if download succeeded
@@ -199,7 +221,7 @@ def download_video(video_id: int) -> None:
     else:
         logger.warning(
             "Skipping highlight detection due to download error",
-            extra={"video_id": video_id},
+            extra={"video_id": video_id, "task_id": msg_id},
         )
 
 
@@ -232,6 +254,7 @@ async def _detect_highlights_task(video_id: int) -> None:
             )
 
             # Create Clip records for each segment
+            clip_ids = []
             for segment in segments:
                 clip = Clip(
                     video_id=video_id,
@@ -241,13 +264,19 @@ async def _detect_highlights_task(video_id: int) -> None:
                     status=ClipStatus.RENDERING.value,
                 )
                 session.add(clip)
+                await session.flush()  # Flush to get clip ID
+                clip_ids.append(clip.id)
 
             video.clip_generation_mode = ClipGenerationMode.REPLACE.value
             await session.flush()
 
             logger.info(
                 "Clips created successfully",
-                extra={"video_id": video_id, "clip_count": len(segments)},
+                extra={
+                    "video_id": video_id,
+                    "clip_count": len(segments),
+                    "clip_ids": clip_ids,
+                },
             )
 
         except HighlightDetectionError as exc:
@@ -275,7 +304,12 @@ async def _detect_highlights_task(video_id: int) -> None:
 def detect_highlights(video_id: int) -> None:
     """Detect highlights using LLM and create Clip records."""
 
-    logger.info("Starting highlight detection", extra={"video_id": video_id})
+    msg_id = _current_message_id()
+
+    logger.info(
+        "Starting highlight detection",
+        extra={"video_id": video_id, "task_id": msg_id},
+    )
     _run_async(_detect_highlights_task(video_id))
 
     # Only continue to next stage if highlight detection succeeded
@@ -289,7 +323,7 @@ def detect_highlights(video_id: int) -> None:
     else:
         logger.warning(
             "Skipping finalization due to highlight detection error",
-            extra={"video_id": video_id},
+            extra={"video_id": video_id, "task_id": msg_id},
         )
 
 
@@ -297,7 +331,12 @@ def detect_highlights(video_id: int) -> None:
 def finalize_video(video_id: int) -> None:
     """Complete the pipeline (stub) by marking the video ready."""
 
-    logger.info("Finalize video", extra={"video_id": video_id})
+    msg_id = _current_message_id()
+
+    logger.info(
+        "Finalize video",
+        extra={"video_id": video_id, "task_id": msg_id},
+    )
     _run_async(_set_video_status(video_id, VideoStatus.READY))
 
 

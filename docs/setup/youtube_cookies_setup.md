@@ -125,10 +125,15 @@ docker compose logs -f worker | grep -i cookies
 fly logs -a forgotten-app | grep -i cookies
 ```
 
-You should see:
+You should see logs like:
 ```
 Using cookies file for YouTube download cookies_file=/app/youtube_cookies.txt
+Using cookies file for YouTube transcript fetch cookies_file=/app/youtube_cookies.txt
 ```
+The same exported cookies are reused by yt-dlp (video download) and as a fallback for
+transcripts when OAuth isn't connected. If cookies expire while OAuth is also unavailable,
+highlight detection can't read captions, so refresh them whenever you see `RequestBlocked`
+or "Sign in to confirm you're not a bot" errors in Fly logs.
 
 Then try ingesting a video from the admin dashboard.
 

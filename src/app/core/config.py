@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     ADMIN_USERNAME: str | None = None
     ADMIN_PASSWORD: str | None = None
     REDIS_URL: str = "redis://localhost:6379/0"
-    DRAMATIQ_BROKER: str = "stub"
+    DRAMATIQ_BROKER: str = "redis"
     WORKER_CONCURRENCY: int = 4
     JWT_SECRET: str = "change-me"
     JWT_ALGORITHM: str = "HS256"
@@ -44,12 +44,14 @@ class Settings(BaseSettings):
     YOUTUBE_REDIRECT_URI: str | None = None
     YOUTUBE_OAUTH_SCOPES: list[str] = [
         "https://www.googleapis.com/auth/youtube.readonly",
+        "https://www.googleapis.com/auth/youtube.force-ssl",
     ]
     OPENAI_API_KEY: str | None = None
     GOOGLE_CLIENT_ID: str | None = None
     GOOGLE_CLIENT_SECRET: str | None = None
     GOOGLE_REDIRECT_PATH: str = "/api/v1/auth/google/callback"
     OAUTH_STATE_SECRET: str = "change-me-oauth-state"
+    LOG_OUTPUT_MODE: str = "medium"
 
     @property
     def backend_base_url(self) -> str:

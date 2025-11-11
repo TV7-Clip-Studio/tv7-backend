@@ -10,7 +10,7 @@ Cookie-based authentication is fragile:
 
 ## Better Solution: OAuth Connector
 
-Allow operators to authenticate directly with their YouTube account, then download videos "on their behalf."
+Allow operators to authenticate directly with their YouTube account, then download videos "on their behalf." The same OAuth connection now powers transcript downloads through the YouTube Data API (`youtube.force-ssl` scope) so captions remain available even when cookie scraping fails.
 
 ## How It Would Work
 
@@ -103,7 +103,7 @@ oauth.register(
     client_secret=settings.GOOGLE_CLIENT_SECRET,
     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
     client_kwargs={
-        'scope': 'openid email profile https://www.googleapis.com/auth/youtube.readonly'
+        'scope': 'openid email profile https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.force-ssl'
     }
 )
 
