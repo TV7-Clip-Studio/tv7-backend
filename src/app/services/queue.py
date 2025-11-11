@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import dramatiq
 from dramatiq import Broker
 from dramatiq.brokers.redis import RedisBroker
@@ -31,7 +33,16 @@ def _build_broker() -> Broker:
     middleware = list(_DEFAULT_MIDDLEWARE)
 
     if broker_type == "redis":
-        return RedisBroker(url=settings.REDIS_URL, middleware=middleware)
+        try:
+            return RedisBroker(url=settings.REDIS_URL, middleware=middleware)
+        except OSError as exc:  # pragma: no cover - depends on network errors
+            msg = (
+                "Failed to connect to Redis broker "
+                f"({settings.REDIS_URL}); falling back to stub. Error: {exc}"
+            )
+            settings_logger = logging.getLogger(__name__)
+            settings_logger.warning(msg)
+            return StubBroker(middleware=middleware)
     if broker_type == "stub":
         return StubBroker(middleware=middleware)
 

@@ -44,7 +44,7 @@ async def test_ingest_creates_video(
     video_id = data["video"]["id"]
 
     mock_enqueue.assert_awaited_once_with(
-        video_id, source_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        video_id, source_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ", user_id=None
     )
 
     stored = (await db_session.execute(select(Video).where(Video.id == video_id))).scalar_one()
@@ -73,7 +73,9 @@ async def test_ingest_requeues_existing(
     assert data["created"] is False
     assert data["video"]["id"] == video.id
 
-    mock_enqueue.assert_awaited_once_with(video.id, source_url="https://youtu.be/abc123")
+    mock_enqueue.assert_awaited_once_with(
+        video.id, source_url="https://youtu.be/abc123", user_id=None
+    )
 
 
 async def test_ingest_rejects_non_youtube(

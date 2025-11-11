@@ -83,10 +83,21 @@ async def _video_has_error(video_id: int) -> bool:
 
 
 @actor(broker=_broker, max_retries=3)
-def process_video(video_id: int) -> None:
+def process_video(video_id: int, message_id: str | None = None) -> None:
     """Entry point for the pipeline: mark video processing and kick off stages."""
+    import dramatiq
 
-    logger.info("Process video", extra={"video_id": video_id})
+    # Get current message ID from Dramatiq context
+    try:
+        current_message = dramatiq.get_current_message()
+        msg_id = current_message.message_id if current_message else message_id or "unknown"
+    except (AttributeError, RuntimeError):
+        msg_id = message_id or "unknown"
+
+    logger.info(
+        "Process video",
+        extra={"video_id": video_id, "task_id": msg_id},
+    )
     _run_async(_set_video_status(video_id, VideoStatus.PROCESSING))
     download_video.send(video_id)
 
@@ -183,8 +194,18 @@ async def _download_video_task(video_id: int) -> None:
 @actor(broker=_broker, max_retries=3)
 def download_video(video_id: int) -> None:
     """Download YouTube video and transcript."""
+    import dramatiq
 
-    logger.info("Starting video download", extra={"video_id": video_id})
+    try:
+        current_message = dramatiq.get_current_message()
+        msg_id = current_message.message_id if current_message else "unknown"
+    except (AttributeError, RuntimeError):
+        msg_id = "unknown"
+
+    logger.info(
+        "Starting video download",
+        extra={"video_id": video_id, "task_id": msg_id},
+    )
     _run_async(_download_video_task(video_id))
 
     # Only continue to next stage if download succeeded
@@ -199,7 +220,7 @@ def download_video(video_id: int) -> None:
     else:
         logger.warning(
             "Skipping highlight detection due to download error",
-            extra={"video_id": video_id},
+            extra={"video_id": video_id, "task_id": msg_id},
         )
 
 
@@ -232,6 +253,7 @@ async def _detect_highlights_task(video_id: int) -> None:
             )
 
             # Create Clip records for each segment
+            clip_ids = []
             for segment in segments:
                 clip = Clip(
                     video_id=video_id,
@@ -241,13 +263,19 @@ async def _detect_highlights_task(video_id: int) -> None:
                     status=ClipStatus.RENDERING.value,
                 )
                 session.add(clip)
+                await session.flush()  # Flush to get clip ID
+                clip_ids.append(clip.id)
 
             video.clip_generation_mode = ClipGenerationMode.REPLACE.value
             await session.flush()
 
             logger.info(
                 "Clips created successfully",
-                extra={"video_id": video_id, "clip_count": len(segments)},
+                extra={
+                    "video_id": video_id,
+                    "clip_count": len(segments),
+                    "clip_ids": clip_ids,
+                },
             )
 
         except HighlightDetectionError as exc:
@@ -274,8 +302,18 @@ async def _detect_highlights_task(video_id: int) -> None:
 @actor(broker=_broker, max_retries=3)
 def detect_highlights(video_id: int) -> None:
     """Detect highlights using LLM and create Clip records."""
+    import dramatiq
 
-    logger.info("Starting highlight detection", extra={"video_id": video_id})
+    try:
+        current_message = dramatiq.get_current_message()
+        msg_id = current_message.message_id if current_message else "unknown"
+    except (AttributeError, RuntimeError):
+        msg_id = "unknown"
+
+    logger.info(
+        "Starting highlight detection",
+        extra={"video_id": video_id, "task_id": msg_id},
+    )
     _run_async(_detect_highlights_task(video_id))
 
     # Only continue to next stage if highlight detection succeeded
@@ -289,15 +327,25 @@ def detect_highlights(video_id: int) -> None:
     else:
         logger.warning(
             "Skipping finalization due to highlight detection error",
-            extra={"video_id": video_id},
+            extra={"video_id": video_id, "task_id": msg_id},
         )
 
 
 @actor(broker=_broker, max_retries=3)
 def finalize_video(video_id: int) -> None:
     """Complete the pipeline (stub) by marking the video ready."""
+    import dramatiq
 
-    logger.info("Finalize video", extra={"video_id": video_id})
+    try:
+        current_message = dramatiq.get_current_message()
+        msg_id = current_message.message_id if current_message else "unknown"
+    except (AttributeError, RuntimeError):
+        msg_id = "unknown"
+
+    logger.info(
+        "Finalize video",
+        extra={"video_id": video_id, "task_id": msg_id},
+    )
     _run_async(_set_video_status(video_id, VideoStatus.READY))
 
 

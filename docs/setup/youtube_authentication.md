@@ -22,9 +22,12 @@ YouTube uses two completely different authentication mechanisms:
 - ✅ Read video metadata via API
 - ❌ **Cannot** download videos with yt-dlp
 
-**Setup**: See [youtube_oauth_connector.md](youtube_oauth_connector.md)
+**Setup**: See [youtube_oauth_connector.md](youtube_oauth_connector.md). Make sure the OAuth
+client requests both `youtube.readonly` and `youtube.force-ssl`; operators who connected
+before this scope was added must disconnect/reconnect so Google issues a refreshed token.
 
-**Status**: ✅ Fully implemented (Phase 2.7)
+**Status**: ✅ Fully implemented (Phase 2.7) — also used for transcript downloads via the
+YouTube Data API when an operator is connected.
 
 ---
 
@@ -107,7 +110,9 @@ yt-dlp is a **video downloader**, not an API client. It needs to pretend to be a
 | Task | Auth Method | Notes |
 |------|-------------|-------|
 | Download source videos | **Cookies** | Required for yt-dlp |
+| Fetch transcripts (preferred) | **OAuth** | Uses YouTube Data API captions endpoints when connected |
 | Upload generated clips | **OAuth** | Future feature (Phase 3) |
+| Fetch transcripts (fallback) | **Cookies** | Used when OAuth is unavailable or blocked |
 | Bypass age restrictions | **Cookies** | OAuth won't help |
 | Avoid bot detection | **Cookies** | OAuth won't help |
 | Manage YouTube channel | **OAuth** | API operations |
@@ -157,16 +162,17 @@ When users connect OAuth, we could:
 
 **Cons**: Requires browser automation in Docker, complex setup
 
-### Option B: Switch to YouTube Data API
+### Option B: Switch to YouTube Data API Only
 
 Stop downloading videos entirely. Instead:
 - Users upload videos directly to app
-- Use YouTube Data API to fetch metadata
+- Use YouTube Data API to fetch metadata/transcripts
 - Upload generated clips via OAuth
 
 **Pros**: Fully OAuth-based, no cookies needed
 
-**Cons**: Different workflow, can't process arbitrary YouTube URLs
+**Cons**: Different workflow, can't process arbitrary YouTube URLs. Current build already
+uses the Data API for transcripts but still needs cookies for the raw video bytes.
 
 ---
 

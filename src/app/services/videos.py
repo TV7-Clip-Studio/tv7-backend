@@ -60,8 +60,8 @@ class VideoDashboardEntry:
     clips: ClipSummary
 
 
-async def _default_dispatch(video_id: int, source_url: str) -> None:
-    await enqueue_video(video_id, source_url=source_url)
+async def _default_dispatch(video_id: int, source_url: str, user_id: int | None = None) -> None:
+    await enqueue_video(video_id, source_url=source_url, user_id=user_id)
 
 
 async def ingest_video(
@@ -83,7 +83,11 @@ async def ingest_video(
         video = existing
         logger.info(
             "Video already ingested; re-queueing",
-            extra={"video_id": video.id, "source_url": video.source_url},
+            extra={
+                "video_id": video.id,
+                "source_url": video.source_url,
+                "user_id": requested_by_user_id,
+            },
         )
     else:
         video = Video(
@@ -95,7 +99,13 @@ async def ingest_video(
         await repo.add(video)
         video = await repo.refresh(video)
         created = True
-        logger.info("Created new video record", extra={"video_id": video.id})
+        logger.info(
+            "Created new video record",
+            extra={
+                "video_id": video.id,
+                "user_id": requested_by_user_id,
+            },
+        )
     video.clip_generation_mode = clip_mode.value
     if requested_by_user_id and video.requested_by_user_id is None:
         video.requested_by_user_id = requested_by_user_id

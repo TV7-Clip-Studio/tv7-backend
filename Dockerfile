@@ -23,8 +23,9 @@ COPY . .
 RUN mkdir -p /app/media/videos /app/media/clips
 
 COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY docker/start.sh /start.sh
+RUN chmod +x /entrypoint.sh /start.sh
 
 EXPOSE 8000
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--app-dir", "src"]
+CMD ["/start.sh"]

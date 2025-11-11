@@ -262,6 +262,28 @@ docker compose up redis worker  # launches queue + worker
 DRAMATIQ_BROKER=stub make worker
 ```
 
+### Fly deployment checklist
+
+1. **Set secrets** (replace values with your own; the Redis URL can come from Upstash, Fly Redis, etc.):
+   ```bash
+   fly secrets set \
+     DATABASE_URL="postgresql+asyncpg://..." \
+     DATABASE_ADMIN_URL="postgresql+psycopg://..." \
+     REDIS_URL="redis://default:<password>@<host>:<port>/0" \
+     DRAMATIQ_BROKER=redis \
+     YOUTUBE_COOKIES_B64="$(base64 -w0 youtube_cookies.txt)" \
+     YOUTUBE_COOKIES_FILE=/app/youtube_cookies.txt \
+     -a forgotten-app
+   ```
+
+2. **Deploy and scale both processes** (API + worker):
+   ```bash
+   fly deploy -a forgotten-app
+   fly scale count app=1 worker=1 -a forgotten-app
+   ```
+
+   The `app` process runs Uvicorn on `0.0.0.0:8000`; the `worker` process runs Dramatiq pointed at `REDIS_URL`. Scale them independently as load grows (`fly scale count app=2 worker=1`, etc.).
+
 ## Fly smoke test
 
 Deploying to Fly? After `fly deploy`, run:

@@ -35,7 +35,7 @@ class TestVideoIngestSystem:
 
         video_id = payload["video"]["id"]
         enqueue_mock.assert_awaited_once_with(
-            video_id, source_url="https://www.youtube.com/watch?v=abc123"
+            video_id, source_url="https://www.youtube.com/watch?v=abc123", user_id=None
         )
 
         stored = (await db_session.execute(select(Video).where(Video.id == video_id))).scalar_one()
@@ -66,7 +66,9 @@ class TestVideoIngestSystem:
         assert payload["created"] is False
         assert payload["video"]["id"] == video.id
 
-        enqueue_mock.assert_awaited_once_with(video.id, source_url="https://youtu.be/abc123")
+        enqueue_mock.assert_awaited_once_with(
+            video.id, source_url="https://youtu.be/abc123", user_id=None
+        )
 
     async def test_ingest_rejects_non_youtube(
         self,
