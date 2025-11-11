@@ -6,6 +6,8 @@ import sys
 from datetime import UTC, datetime
 from typing import Any
 
+from app.core.config import settings
+
 _RESERVED_LOG_RECORD_ATTRS = {
     "name",
     "msg",
@@ -77,14 +79,8 @@ class AppLogFormatter(logging.Formatter):
 
 
 def _resolve_mode(mode: str | None) -> str:
-    if mode:
-        return mode
-    try:
-        from app.core.config import settings  # pylint: disable=import-error
-
-        return getattr(settings, "LOG_OUTPUT_MODE", "medium")
-    except Exception:
-        return "medium"
+    candidate = (mode or getattr(settings, "LOG_OUTPUT_MODE", "medium") or "medium").strip()
+    return candidate.lower() or "medium"
 
 
 def setup_logging(level: int = logging.INFO, *, mode: str | None = None) -> None:

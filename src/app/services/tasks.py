@@ -5,9 +5,10 @@ import logging
 import threading
 from collections.abc import Coroutine
 from concurrent.futures import Future
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from dramatiq import actor
+from dramatiq.middleware import CurrentMessage
 from sqlalchemy import delete
 
 from app.db.base import session_scope
@@ -53,6 +54,16 @@ def _run_async(coro: Coroutine[Any, Any, T]) -> T:  # noqa: UP047
     return future.result()
 
 
+def _current_message_id(fallback: str = "unknown") -> str:
+    try:
+        current_message = CurrentMessage.get_current_message()
+        if current_message is None:
+            return fallback
+        return cast(str, current_message.message_id)
+    except Exception:
+        return fallback
+
+
 async def _set_video_status(video_id: int, status: VideoStatus) -> None:
     async with session_scope() as session:
         video = await session.get(Video, video_id)
@@ -85,14 +96,9 @@ async def _video_has_error(video_id: int) -> bool:
 @actor(broker=_broker, max_retries=3)
 def process_video(video_id: int, message_id: str | None = None) -> None:
     """Entry point for the pipeline: mark video processing and kick off stages."""
-    import dramatiq
 
     # Get current message ID from Dramatiq context
-    try:
-        current_message = dramatiq.get_current_message()
-        msg_id = current_message.message_id if current_message else message_id or "unknown"
-    except (AttributeError, RuntimeError):
-        msg_id = message_id or "unknown"
+    msg_id = _current_message_id(message_id or "unknown")
 
     logger.info(
         "Process video",
@@ -194,13 +200,8 @@ async def _download_video_task(video_id: int) -> None:
 @actor(broker=_broker, max_retries=3)
 def download_video(video_id: int) -> None:
     """Download YouTube video and transcript."""
-    import dramatiq
 
-    try:
-        current_message = dramatiq.get_current_message()
-        msg_id = current_message.message_id if current_message else "unknown"
-    except (AttributeError, RuntimeError):
-        msg_id = "unknown"
+    msg_id = _current_message_id()
 
     logger.info(
         "Starting video download",
@@ -302,13 +303,8 @@ async def _detect_highlights_task(video_id: int) -> None:
 @actor(broker=_broker, max_retries=3)
 def detect_highlights(video_id: int) -> None:
     """Detect highlights using LLM and create Clip records."""
-    import dramatiq
 
-    try:
-        current_message = dramatiq.get_current_message()
-        msg_id = current_message.message_id if current_message else "unknown"
-    except (AttributeError, RuntimeError):
-        msg_id = "unknown"
+    msg_id = _current_message_id()
 
     logger.info(
         "Starting highlight detection",
@@ -334,13 +330,8 @@ def detect_highlights(video_id: int) -> None:
 @actor(broker=_broker, max_retries=3)
 def finalize_video(video_id: int) -> None:
     """Complete the pipeline (stub) by marking the video ready."""
-    import dramatiq
 
-    try:
-        current_message = dramatiq.get_current_message()
-        msg_id = current_message.message_id if current_message else "unknown"
-    except (AttributeError, RuntimeError):
-        msg_id = "unknown"
+    msg_id = _current_message_id()
 
     logger.info(
         "Finalize video",
