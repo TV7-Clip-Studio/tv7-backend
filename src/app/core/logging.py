@@ -72,10 +72,9 @@ class AppLogFormatter(logging.Formatter):
             return json.dumps(event, default=str, ensure_ascii=False)
 
         # medium (default)
-        ts = self._timestamp()
         level = record.levelname.upper()
         suffix = f" {extra_json}" if extra_json else ""
-        return f"{ts} {level}: >> {message} <<{suffix}"
+        return f"{level}: {message} >> {suffix}"
 
 
 def _resolve_mode(mode: str | None) -> str:

@@ -100,7 +100,12 @@
     </div>
 
     {% if youtube_oauth_configured %}
-      {% if youtube_connected %}
+      {% if youtube_scope_missing %}
+        <div class="flash error" style="margin-top:1rem;">
+          Your YouTube account is connected but missing transcript permissions.
+          <a href="/admin/youtube/connect" style="color:#fff; text-decoration:underline;">Reconnect now →</a>
+        </div>
+      {% elif youtube_connected %}
         <div class="flash" style="margin-top:1rem;">YouTube is connected. Downloads use your account permissions.</div>
       {% else %}
         <div class="flash error" style="margin-top:1rem;">
