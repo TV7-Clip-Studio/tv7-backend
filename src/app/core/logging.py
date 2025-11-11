@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import json
 import logging
 import sys
 from datetime import UTC, datetime
+from typing import Any
 
 _RESERVED_LOG_RECORD_ATTRS = {
     "name",
@@ -29,29 +32,65 @@ _RESERVED_LOG_RECORD_ATTRS = {
 }
 
 
-class JsonFormatter(logging.Formatter):
+def _extract_extra(record: logging.LogRecord) -> dict[str, Any]:
+    extra: dict[str, Any] = {}
+    for key, value in record.__dict__.items():
+        if key in _RESERVED_LOG_RECORD_ATTRS:
+            continue
+        extra[key] = value
+    return extra
+
+
+class AppLogFormatter(logging.Formatter):
+    def __init__(self, mode: str = "medium") -> None:
+        super().__init__()
+        self.mode = (mode or "medium").strip().lower()
+
+    def _timestamp(self) -> str:
+        return datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M:%S")
+
     def format(self, record: logging.LogRecord) -> str:  # noqa: D401
-        event = {
-            "timestamp": datetime.now(tz=UTC).isoformat(),
-            "level": record.levelname.lower(),
-            "event": record.getMessage(),
-            "logger": record.name,
-        }
+        message = record.getMessage()
+        extra = _extract_extra(record)
+        extra.setdefault("logger", record.name)
+        extra_json = json.dumps(extra, default=str, ensure_ascii=False) if extra else ""
 
-        for key, value in record.__dict__.items():
-            if key in _RESERVED_LOG_RECORD_ATTRS:
-                continue
-            event[key] = value
+        if self.mode == "minimal":
+            return message
 
-        if record.exc_info:
-            event["exc_info"] = self.formatException(record.exc_info)
+        if self.mode == "full":
+            event = {
+                "timestamp": self._timestamp(),
+                "level": record.levelname.lower(),
+                "event": message,
+                **extra,
+            }
+            if record.exc_info:
+                event["exc_info"] = self.formatException(record.exc_info)
+            return json.dumps(event, default=str, ensure_ascii=False)
 
-        return json.dumps(event, default=str)
+        # medium (default)
+        ts = self._timestamp()
+        level = record.levelname.upper()
+        suffix = f" {extra_json}" if extra_json else ""
+        return f"{ts} {level}: >> {message} <<{suffix}"
 
 
-def setup_logging(level: int = logging.INFO) -> None:
+def _resolve_mode(mode: str | None) -> str:
+    if mode:
+        return mode
+    try:
+        from app.core.config import settings  # pylint: disable=import-error
+
+        return getattr(settings, "LOG_OUTPUT_MODE", "medium")
+    except Exception:
+        return "medium"
+
+
+def setup_logging(level: int = logging.INFO, *, mode: str | None = None) -> None:
+    resolved_mode = _resolve_mode(mode)
     handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(JsonFormatter())
+    handler.setFormatter(AppLogFormatter(mode=resolved_mode))
 
     root_logger = logging.getLogger()
     root_logger.handlers.clear()

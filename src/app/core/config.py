@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str | None = None
     GOOGLE_REDIRECT_PATH: str = "/api/v1/auth/google/callback"
     OAUTH_STATE_SECRET: str = "change-me-oauth-state"
+    LOG_OUTPUT_MODE: str = "medium"
 
     @property
     def backend_base_url(self) -> str:
