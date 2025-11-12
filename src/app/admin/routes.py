@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import quote_plus
 
+import anyio
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -32,6 +33,7 @@ from app.services.auth import (
     issue_tokens_for_user,
     resolve_user_from_token,
 )
+from app.services.storage import delete_video_media
 from app.services.users import (
     CannotDeleteCurrentUserError,
     UserNotFoundError,
@@ -414,12 +416,30 @@ async def delete_video(
     if not user:
         return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
 
-    # Delete the video record (this will cascade delete clips due to foreign key)
+    video = await video_repo.get_with_clips(video_id)
+    if not video:
+        return RedirectResponse(
+            url="/admin/videos?error=Video%20not%20found",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+
+    clip_ids = [clip.id for clip in video.clips]
+
     await video_repo.delete(video_id)
+    await _delete_video_media_async(video_id, clip_ids)
 
     return RedirectResponse(
-        url="/admin/videos?flash=Video deleted successfully",
+        url="/admin/videos?flash=Video%20deleted%20successfully",
         status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+async def _delete_video_media_async(video_id: int, clip_ids: list[int]) -> None:
+    await anyio.to_thread.run_sync(
+        delete_video_media,
+        video_id,
+        clip_ids,
+        cancellable=False,
     )
 
 

@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.admin.routes import SESSION_COOKIE_NAME
 from app.db.models import Clip, ClipGenerationMode, ClipStatus, Video, VideoStatus
@@ -358,3 +358,57 @@ async def test_video_status_endpoint_returns_video_payload(
     assert isinstance(payload["clips"], list)
     assert payload["clips"][0]["caption_text"] == "Testing status JSON"
     assert payload["clips"][0]["status"] == ClipStatus.RENDERING.value
+
+
+@pytest.mark.anyio
+async def test_video_delete_offloads_media_cleanup(
+    app_client: AsyncClient,
+    system_login_credentials: tuple[str, str],
+    db_session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video = Video(
+        source_url="https://www.youtube.com/watch?v=delete_test",
+        status=VideoStatus.READY.value,
+    )
+    db_session.add(video)
+    await db_session.commit()
+    await db_session.refresh(video)
+
+    clip = Clip(
+        video_id=video.id,
+        start_sec=0,
+        end_sec=15,
+        status=ClipStatus.READY.value,
+    )
+    db_session.add(clip)
+    await db_session.commit()
+    await db_session.refresh(clip)
+
+    email, password = system_login_credentials
+    login_response = await app_client.post(
+        "/admin/login",
+        data={"email": email, "password": password},
+        follow_redirects=False,
+    )
+    app_client.cookies.update(login_response.cookies)
+
+    called: dict[str, object] = {}
+
+    async def fake_delete_async(video_id_arg: int, clip_ids_arg: list[int]) -> None:
+        called["args"] = (video_id_arg, clip_ids_arg)
+
+    monkeypatch.setattr("app.admin.routes._delete_video_media_async", fake_delete_async)
+
+    response = await app_client.post(
+        f"/admin/videos/{video.id}/delete",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert called["args"] == (video.id, [clip.id])
+
+    async with session_factory() as verify_session:
+        remaining = await verify_session.get(Video, video.id)
+    assert remaining is None

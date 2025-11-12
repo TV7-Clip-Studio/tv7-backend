@@ -13,6 +13,7 @@ services:
     depends_on: [postgres, redis]
     volumes:
       - ./src:/app/src
+      - ./scripts:/app/scripts
       - ./alembic:/app/alembic
       - ./media:/app/media
 
