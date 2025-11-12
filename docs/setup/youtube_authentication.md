@@ -24,7 +24,9 @@ YouTube uses two completely different authentication mechanisms:
 
 **Setup**: See [youtube_oauth_connector.md](youtube_oauth_connector.md). Make sure the OAuth
 client requests both `youtube.readonly` and `youtube.force-ssl`; operators who connected
-before this scope was added must disconnect/reconnect so Google issues a refreshed token.
+before this scope was added must disconnect/reconnect so Google issues a refreshed token. The admin
+dashboard now surfaces a “Reconnect your YouTube account to grant transcript permissions” warning
+when we detect that the account is missing the captions scope.
 
 **Status**: ✅ Fully implemented (Phase 2.7) — also used for transcript downloads via the
 YouTube Data API when an operator is connected.

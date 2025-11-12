@@ -61,11 +61,13 @@
         <span class="timeline__status">Assets available</span>
         <small style="color:#94a3b8;">Final clips appear below with previews.</small>
       </div>
+      {% if video.status == 'error' and video.error_message %}
       <div class="timeline__step" data-step="error">
         <span class="timeline__label">Issue detected</span>
         <span class="timeline__status">Action required</span>
         <small style="color:#fca5a5;">See error message above for details.</small>
       </div>
+      {% endif %}
     </div>
 
     <div style="margin-top: 1rem;">
@@ -100,7 +102,12 @@
     </div>
 
     {% if youtube_oauth_configured %}
-      {% if youtube_connected %}
+      {% if youtube_scope_missing %}
+        <div class="flash error" style="margin-top:1rem;">
+          Your YouTube account is connected but missing transcript permissions.
+          <a href="/admin/youtube/connect" style="color:#fff; text-decoration:underline;">Reconnect now →</a>
+        </div>
+      {% elif youtube_connected %}
         <div class="flash" style="margin-top:1rem;">YouTube is connected. Downloads use your account permissions.</div>
       {% else %}
         <div class="flash error" style="margin-top:1rem;">

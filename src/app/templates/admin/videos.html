@@ -29,9 +29,18 @@
           <form method="post" action="/admin/youtube/disconnect">
             <button class="btn btn-secondary" type="submit">Disconnect</button>
           </form>
+          {% if youtube_scope_missing %}
+            <p style="color:#fbbf24; margin:0.5rem 0 0;">Reconnect to grant transcript permissions.</p>
+            <a class="btn btn-secondary" href="/admin/youtube/connect" style="margin-top:0.5rem;">Reconnect YouTube</a>
+          {% endif %}
         {% else %}
-          <span style="color:#fbbf24; font-weight:600;">Connect your YouTube account to download age-restricted videos.</span>
-          <a class="btn" href="/admin/youtube/connect">Connect YouTube</a>
+          {% if youtube_scope_missing %}
+            <span style="color:#fbbf24; font-weight:600;">Reconnect your YouTube account to grant transcript permissions.</span>
+            <a class="btn" href="/admin/youtube/connect">Reconnect YouTube</a>
+          {% else %}
+            <span style="color:#fbbf24; font-weight:600;">Connect your YouTube account to download age-restricted videos.</span>
+            <a class="btn" href="/admin/youtube/connect">Connect YouTube</a>
+          {% endif %}
         {% endif %}
       {% else %}
         <span style="color:#f87171; font-weight:600;">YouTube OAuth is not configured. Set client credentials to download restricted videos.</span>

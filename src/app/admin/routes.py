@@ -52,6 +52,7 @@ from app.services.youtube_oauth import (
 
 SESSION_COOKIE_NAME = "admin_session"
 YOUTUBE_STATE_COOKIE = "youtube_oauth_state"
+REQUIRED_YOUTUBE_SCOPE = "https://www.googleapis.com/auth/youtube.force-ssl"
 
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
@@ -115,9 +116,21 @@ async def _current_admin_user(
         return None
 
 
-async def _youtube_connected(user_id: int, credential_repo: YouTubeCredentialRepository) -> bool:
+async def _youtube_connection_state(
+    user_id: int, credential_repo: YouTubeCredentialRepository
+) -> tuple[bool, bool]:
     credential = await credential_repo.get_by_user_id(user_id)
-    return credential is not None
+    if not credential:
+        return False, False
+    scope_ok = _credential_has_required_scope(credential.scope)
+    return True, scope_ok
+
+
+def _credential_has_required_scope(scope: str | None) -> bool:
+    if not scope:
+        return False
+    granted = {value.strip() for value in scope.split() if value.strip()}
+    return REQUIRED_YOUTUBE_SCOPE in granted
 
 
 def _error_result(message: str) -> _CallbackResult:
@@ -283,9 +296,12 @@ async def videos_dashboard(
     videos = await list_videos(video_repo)
     flash = request.query_params.get("flash")
     error = request.query_params.get("error")
-    youtube_connected = (
-        await _youtube_connected(user.id, credential_repo) if _youtube_oauth_configured() else False
-    )
+    youtube_connected = False
+    youtube_scope_missing = False
+    if _youtube_oauth_configured():
+        connected, scope_ok = await _youtube_connection_state(user.id, credential_repo)
+        youtube_connected = connected and scope_ok
+        youtube_scope_missing = connected and not scope_ok
     context = {
         "request": request,
         "user": user,
@@ -293,6 +309,7 @@ async def videos_dashboard(
         "flash": flash,
         "error": error,
         "youtube_connected": youtube_connected,
+        "youtube_scope_missing": youtube_scope_missing,
         "youtube_oauth_configured": _youtube_oauth_configured(),
     }
     return templates.TemplateResponse(request, "admin/videos.html", context)
@@ -314,15 +331,19 @@ async def video_detail(
     if not entry:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found")
 
-    youtube_connected = (
-        await _youtube_connected(user.id, credential_repo) if _youtube_oauth_configured() else False
-    )
+    youtube_connected = False
+    youtube_scope_missing = False
+    if _youtube_oauth_configured():
+        connected, scope_ok = await _youtube_connection_state(user.id, credential_repo)
+        youtube_connected = connected and scope_ok
+        youtube_scope_missing = connected and not scope_ok
     context = {
         "request": request,
         "user": user,
         "video": entry.video,
         "clip_summary": entry.clips,
         "youtube_connected": youtube_connected,
+        "youtube_scope_missing": youtube_scope_missing,
         "youtube_oauth_configured": _youtube_oauth_configured(),
     }
     return templates.TemplateResponse(request, "admin/video_detail.html", context)
