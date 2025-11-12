@@ -40,8 +40,9 @@ These tables represent the single source of truth for processing state. Backgrou
    - Response yields 3–5 segments with `{start_sec, end_sec, hook}`.
    - Creates `Clip` rows for each segment with `status=rendering` and stores the hook text in `caption_text`.
 3. **Clip Rendering & Subtitle Styling**
-   - `services/clipper.py` uses ffmpeg to cut each segment, reframe to 9:16, and export lossless mezzanine files.
-   - `services/subtitle_styler.py` overlays high-contrast subtitles sliced from the transcript segment.
+   - `services/clipper.py` shells out to ffmpeg/ffprobe (configurable via `FFMPEG_BIN`/`FFPROBE_BIN`) to slice each segment, clamp durations to `CLIP_MAX_DURATION_SECONDS`, reframe to 9:16, and export mezzanine files before moving them into `/media/clips/{video_id}/{clip_id}.mp4`.
+   - The Dramatiq `render_clips` stage fans out per-clip jobs keyed by a `render_batch_id`, so workers can process clips in parallel; once every clip reaches `ready`, the system automatically enqueues `finalize_video`.
+   - `services/subtitle_styler.py` (Phase 1.9) will overlay high-contrast subtitles sliced from the transcript segment.
    - Final assets saved to storage; update each `Clip` (`local_path`, `status=ready`).
 4. **Video Completion**
    - When all clips reach `ready`, update the parent `Video.status="ready"`.
@@ -72,6 +73,16 @@ All endpoints remain within the FastAPI application. Swagger `/docs` should desc
 - **Observability:** Record timestamps and durations per pipeline stage; expose them via logs and metrics to surface bottlenecks (download time, LLM latency, ffmpeg performance).
 - **Admin credentials:** Rotate the HTTP Basic credentials via `make admin-credentials` (writes to `.env`, syncs Fly secrets, and prints the values) before deploying.
 - **Extensibility:** Additional services (thumbnail generation, branded overlays, true publisher integrations) should build atop these core models without splitting the codebase.
+
+## Media Storage & Rendering Workspace
+- **Directory contract:** All media lives under `MEDIA_STORAGE_DIR` (default `./media`). Each video owns:
+  - `media/videos/{video_id}` — original download + transcripts (`Video.local_path`, `Video.workspace_root`)
+  - `media/clips/{video_id}` — final rendered shorts exposed via `/media/clips/{video_id}/{clip_id}.mp4`
+  - `media/tmp/{video_id}/{clip_id}` — per-clip scratch space with `mezzanine/` and `subtitles/` children used during ffmpeg + captioning.
+- **Workspace helper:** `app.services.render_workspace.VideoWorkspace` ensures this layout exists, returns deterministic public URLs, and exposes `ClipPaths` objects containing final, mezzanine, and subtitle file locations plus cleanup helpers. Rendering tasks should call `get_video_workspace(video_id)` once and reuse the returned paths instead of hard-coding directories.
+- **Database metadata:** `Video.workspace_root` stores the absolute source directory, `Video.render_batch_id` tracks the active fan-out batch, and each `Clip` records `render_width`, `render_height`, `frame_rate`, `file_size_bytes`, and optional `thumbnail_path`. This keeps admin/API responses in sync with whatever the clipper produces (ffmpeg, remote worker, etc.).
+- **Configuration knobs:** `CLIP_MAX_DURATION_SECONDS`, `CLIP_TARGET_HEIGHT`, and `CLIP_OUTPUT_BITRATE` live in `settings` to keep rendering parameters centralized. Future storage backends (S3/GCS) only need to swap `MEDIA_STORAGE_DIR` + StaticFiles mounting logic while the rest of the code continues to ask the workspace helper for paths/public URLs.
+- **Rendering binaries:** `FFMPEG_BIN` and `FFPROBE_BIN` point to the host binaries (Docker image installs ffmpeg already). Local developers running outside Docker must install ffmpeg/ffprobe or override the paths in `.env`.
 
 ## API Layering & Dependencies
 

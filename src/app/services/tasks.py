@@ -3,20 +3,23 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+import uuid
 from collections.abc import Coroutine
 from concurrent.futures import Future
 from typing import Any, TypeVar, cast
 
 from dramatiq import actor
 from dramatiq.middleware import CurrentMessage
-from sqlalchemy import delete
+from sqlalchemy import delete, func, select
 
 from app.db.base import session_scope
 from app.db.models import Clip, ClipGenerationMode, ClipStatus, Video, VideoStatus
 from app.repositories.youtube_credentials import YouTubeCredentialRepository
+from app.services.clipper import ClipRenderError, render_clip
 from app.services.highlight_detector import HighlightDetectionError
 from app.services.highlight_detector import detect_highlights as detect_highlights_service
 from app.services.queue import get_broker
+from app.services.render_workspace import get_video_workspace
 from app.services.youtube_downloader import (
     DownloadError,
     VideoTooLargeError,
@@ -54,14 +57,14 @@ def _run_async(coro: Coroutine[Any, Any, T]) -> T:  # noqa: UP047
     return future.result()
 
 
-def _current_message_id(fallback: str = "unknown") -> str:
+def _current_message_id(fallback: str | None = None) -> str:
     try:
         current_message = CurrentMessage.get_current_message()
         if current_message is None:
-            return fallback
+            raise LookupError
         return cast(str, current_message.message_id)
     except Exception:
-        return fallback
+        return fallback or uuid.uuid4().hex
 
 
 async def _set_video_status(video_id: int, status: VideoStatus) -> None:
@@ -115,6 +118,9 @@ async def _download_video_task(video_id: int) -> None:
         if not video:
             logger.error("Video not found for download", extra={"video_id": video_id})
             return
+
+        workspace = get_video_workspace(video_id)
+        video.workspace_root = str(workspace.root)
 
         access_token: str | None = None
         if video.requested_by_user_id:
@@ -319,12 +325,153 @@ def detect_highlights(video_id: int) -> None:
             return video is not None and video.status != VideoStatus.ERROR.value
 
     if _run_async(_should_continue()):
-        finalize_video.send(video_id)
+        render_clips.send(video_id)
     else:
         logger.warning(
             "Skipping finalization due to highlight detection error",
             extra={"video_id": video_id, "task_id": msg_id},
         )
+
+
+async def _prepare_render_batch(video_id: int) -> tuple[str, list[int]] | None:
+    async with session_scope() as session:
+        video = await session.get(Video, video_id)
+        if not video:
+            logger.error("Video not found for rendering", extra={"video_id": video_id})
+            return None
+
+        if not video.local_path:
+            video.status = VideoStatus.ERROR.value
+            video.error_message = "Video missing local_path for rendering"
+            await session.flush()
+            return None
+
+        result = await session.execute(
+            select(Clip).where(Clip.video_id == video_id).order_by(Clip.start_sec)
+        )
+        clips = result.scalars().all()
+        if not clips:
+            logger.warning("No clips to render", extra={"video_id": video_id})
+            return None
+
+        batch_id = uuid.uuid4().hex
+        video.render_batch_id = batch_id
+        for clip in clips:
+            if clip.status != ClipStatus.READY.value:
+                clip.status = ClipStatus.RENDERING.value
+        await session.flush()
+        return batch_id, [clip.id for clip in clips]
+
+
+async def _render_clips_task(video_id: int) -> None:
+    batch = await _prepare_render_batch(video_id)
+    if not batch:
+        return
+    batch_id, clip_ids = batch
+    logger.info(
+        "Dispatching render batch",
+        extra={"video_id": video_id, "batch_id": batch_id, "clip_ids": clip_ids},
+    )
+    for clip_id in clip_ids:
+        render_clip_job.send(video_id, clip_id, batch_id)
+
+
+async def _render_clip_job(
+    video_id: int,
+    clip_id: int,
+    batch_id: str,
+    *,
+    enqueue_finalize: bool = True,
+) -> None:
+    async with session_scope() as session:
+        video = await session.get(Video, video_id)
+        clip_state = await session.get(Clip, clip_id)
+        if not video or not clip_state or video.render_batch_id != batch_id:
+            return
+        workspace = get_video_workspace(video_id)
+
+    try:
+        clip_result = render_clip(
+            video,
+            clip_state,
+            workspace,
+            overwrite=clip_state.status != ClipStatus.READY.value,
+        )
+    except ClipRenderError as exc:
+        async with session_scope() as session:
+            video = await session.get(Video, video_id)
+            clip = await session.get(Clip, clip_id)
+            if not video or video.render_batch_id != batch_id or not clip:
+                return
+            clip.status = ClipStatus.ERROR.value
+            video.status = VideoStatus.ERROR.value
+            video.error_message = f"Clip {clip_id} render failed: {exc}"
+            video.render_batch_id = None
+            await session.flush()
+        return
+
+    async with session_scope() as session:
+        video = await session.get(Video, video_id)
+        clip = await session.get(Clip, clip_id)
+        if not video or not clip or video.render_batch_id != batch_id:
+            return
+
+        clip.local_path = clip_result.public_url
+        clip.render_width = clip_result.width
+        clip.render_height = clip_result.height
+        clip.frame_rate = clip_result.frame_rate
+        clip.file_size_bytes = clip_result.file_size_bytes
+        clip.status = ClipStatus.READY.value
+        await session.flush()
+
+    completed = await _maybe_finalize_video(video_id, batch_id, enqueue_finalize=enqueue_finalize)
+    if completed and not enqueue_finalize:
+        await _set_video_status(video_id, VideoStatus.READY)
+
+
+async def _maybe_finalize_video(
+    video_id: int,
+    batch_id: str,
+    *,
+    enqueue_finalize: bool = True,
+) -> bool:
+    async with session_scope() as session:
+        video = await session.get(Video, video_id)
+        if not video or video.render_batch_id != batch_id:
+            return False
+        remaining = await session.scalar(
+            select(func.count()).where(
+                Clip.video_id == video_id, Clip.status != ClipStatus.READY.value
+            )
+        )
+        if remaining and remaining > 0:
+            return False
+        video.render_batch_id = None
+        await session.flush()
+
+    if enqueue_finalize:
+        finalize_video.send(video_id)
+    return True
+
+
+@actor(broker=_broker, max_retries=3)
+def render_clips(video_id: int) -> None:
+    msg_id = _current_message_id()
+    logger.info(
+        "Rendering clips",
+        extra={"video_id": video_id, "task_id": msg_id},
+    )
+    _run_async(_render_clips_task(video_id))
+
+
+@actor(broker=_broker, max_retries=3)
+def render_clip_job(video_id: int, clip_id: int, batch_id: str) -> None:
+    msg_id = _current_message_id(f"batch-{batch_id}")
+    logger.info(
+        "Rendering clip job",
+        extra={"video_id": video_id, "clip_id": clip_id, "batch_id": batch_id, "task_id": msg_id},
+    )
+    _run_async(_render_clip_job(video_id, clip_id, batch_id))
 
 
 @actor(broker=_broker, max_retries=3)
@@ -364,5 +511,16 @@ async def run_pipeline_inline(video_id: int) -> None:
         )
         return
 
-    await _set_video_status(video_id, VideoStatus.READY)
+    batch = await _prepare_render_batch(video_id)
+    if not batch:
+        logger.warning("Inline pipeline halted during render prep", extra={"video_id": video_id})
+        return
+
+    batch_id, clip_ids = batch
+    for clip_id in clip_ids:
+        await _render_clip_job(video_id, clip_id, batch_id, enqueue_finalize=False)
+        if await _video_has_error(video_id):
+            logger.warning("Inline pipeline halted during rendering", extra={"video_id": video_id})
+            return
+
     logger.info("Inline pipeline completed", extra={"video_id": video_id})

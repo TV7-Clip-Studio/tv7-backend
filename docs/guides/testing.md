@@ -48,5 +48,7 @@ If Docker is unavailable locally, set `TEST_DATABASE_URL` to point at a Postgres
 3. When a route requires authentication, hit `/api/v1/auth/login` (or use the provided fixtures) to obtain a bearer token instead of bypassing middleware.
 4. When tests mutate environment variables, set them with `monkeypatch` to avoid cross-test leakage.
 5. Keep assertions focused on externally observable behaviour—responses, DB state changes, queued jobs—rather than private implementation details.
+6. Filesystem helpers that orchestrate media layout (e.g., `app.services.render_workspace`) should have direct unit coverage verifying directory creation, public URL generation, and cleanup. See `tests/test_render_workspace.py` for the pattern.
+7. ffmpeg-dependent logic (`app.services.clipper`, render stages in `app.services.tasks`) is covered via unit/system tests that stub `subprocess.run`—never rely on real media downloads in CI. Use tiny fixture videos or write placeholder bytes when stubbing commands.
 
 Refer to `tests/system/test_videos_api_system.py` and `tests/integration/test_users_api_integration.py` as examples for new scenarios.

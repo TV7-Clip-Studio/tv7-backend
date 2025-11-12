@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     MEDIA_STORAGE_DIR: str = "./media"
     VIDEO_QUALITY: str = "720p"
     MAX_VIDEO_FILE_SIZE_MB: int = 500
+    CLIP_MAX_DURATION_SECONDS: int = 60
+    CLIP_TARGET_HEIGHT: int = 1920
+    CLIP_OUTPUT_BITRATE: str = "8M"
+    FFMPEG_BIN: str = "ffmpeg"
+    FFPROBE_BIN: str = "ffprobe"
     YOUTUBE_COOKIES_BROWSER: str | None = (
         None  # chrome, firefox, safari, edge (disabled by default for Docker)
     )
