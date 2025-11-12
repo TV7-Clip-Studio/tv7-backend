@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import quote_plus
 
+import anyio
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -425,12 +426,20 @@ async def delete_video(
     clip_ids = [clip.id for clip in video.clips]
 
     await video_repo.delete(video_id)
-
-    delete_video_media(video_id, clip_ids)
+    await _delete_video_media_async(video_id, clip_ids)
 
     return RedirectResponse(
         url="/admin/videos?flash=Video%20deleted%20successfully",
         status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+async def _delete_video_media_async(video_id: int, clip_ids: list[int]) -> None:
+    await anyio.to_thread.run_sync(
+        delete_video_media,
+        video_id,
+        clip_ids,
+        cancellable=False,
     )
 
 
