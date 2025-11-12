@@ -262,6 +262,16 @@ docker compose up redis worker  # launches queue + worker
 DRAMATIQ_BROKER=stub make worker
 ```
 
+### Media cleanup
+
+Delete stale media directories when records have been removed or the pipeline crashed mid-job:
+
+```bash
+python scripts/cleanup_media.py           # list orphans (videos + clips)
+python scripts/cleanup_media.py --delete # remove them from disk
+```
+Set `--media-dir` if your media root isn’t the default `MEDIA_STORAGE_DIR`.
+
 ### Fly deployment checklist
 
 1. **Set secrets** (replace values with your own; the Redis URL can come from Upstash, Fly Redis, etc.):

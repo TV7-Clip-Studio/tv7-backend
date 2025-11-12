@@ -131,7 +131,8 @@ smoke:
 	curl -s http://localhost:8000/health | jq . ; \
 	curl -s -X POST http://localhost:8000/api/v1/users -H "Content-Type: application/json" -d '{"email":"smoke@example.com","full_name":"Smoke Test"}' | jq . ; \
 	curl -s http://localhost:8000/api/v1/users | jq . ; \
-	curl -s http://localhost:8000/metrics | head -n 5
+	curl -s http://localhost:8000/metrics | head -n 5 ; \
+	PYTHONPATH=src $(PY) scripts/cleanup_media.py
 
 smoke-fly:
 	@echo "Checking Fly health endpoint for $(FLY_APP)" ; \
