@@ -70,7 +70,7 @@ async def ingest_video(
     *,
     requested_by_user_id: int | None = None,
     clip_mode: ClipGenerationMode = ClipGenerationMode.REPLACE,
-    task_dispatcher: Callable[[int, str], Awaitable[None]] | None = None,
+    task_dispatcher: Callable[[int, str, int | None], Awaitable[None]] | None = None,
 ) -> VideoIngestionResult:
     parsed = urlparse(youtube_url)
     if parsed.hostname not in YOUTUBE_DOMAINS:
@@ -114,7 +114,7 @@ async def ingest_video(
     await repo.commit()
 
     dispatcher = task_dispatcher or _default_dispatch
-    await dispatcher(video.id, video.source_url)
+    await dispatcher(video.id, video.source_url, requested_by_user_id)
     video = await repo.refresh(video)
 
     return VideoIngestionResult(video=video, created=created)

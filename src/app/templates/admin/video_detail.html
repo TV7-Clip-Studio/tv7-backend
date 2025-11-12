@@ -61,11 +61,13 @@
         <span class="timeline__status">Assets available</span>
         <small style="color:#94a3b8;">Final clips appear below with previews.</small>
       </div>
+      {% if video.status == 'error' and video.error_message %}
       <div class="timeline__step" data-step="error">
         <span class="timeline__label">Issue detected</span>
         <span class="timeline__status">Action required</span>
         <small style="color:#fca5a5;">See error message above for details.</small>
       </div>
+      {% endif %}
     </div>
 
     <div style="margin-top: 1rem;">
