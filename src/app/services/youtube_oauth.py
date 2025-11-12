@@ -45,12 +45,13 @@ def parse_state_token(state: str) -> tuple[int, str] | None:
 
 
 def build_authorization_url(state: str) -> str:
-    if not settings.YOUTUBE_CLIENT_ID or not settings.YOUTUBE_REDIRECT_URI:
+    redirect_uri = settings.youtube_redirect_uri
+    if not settings.YOUTUBE_CLIENT_ID or not redirect_uri:
         raise RuntimeError("YouTube OAuth is not configured")
 
     params = {
         "client_id": settings.YOUTUBE_CLIENT_ID,
-        "redirect_uri": settings.YOUTUBE_REDIRECT_URI,
+        "redirect_uri": redirect_uri,
         "response_type": "code",
         "scope": " ".join(settings.YOUTUBE_OAUTH_SCOPES),
         "access_type": "offline",
@@ -93,18 +94,15 @@ async def _request_tokens(data: dict[str, str]) -> OAuthTokens:  # pragma: no co
 
 
 async def exchange_code_for_tokens(code: str) -> OAuthTokens:  # pragma: no cover - network
-    if (
-        not settings.YOUTUBE_CLIENT_ID
-        or not settings.YOUTUBE_CLIENT_SECRET
-        or not settings.YOUTUBE_REDIRECT_URI
-    ):
+    redirect_uri = settings.youtube_redirect_uri
+    if not settings.YOUTUBE_CLIENT_ID or not settings.YOUTUBE_CLIENT_SECRET or not redirect_uri:
         raise RuntimeError("YouTube OAuth is not configured")
 
     data = {
         "code": code,
         "client_id": settings.YOUTUBE_CLIENT_ID,
         "client_secret": settings.YOUTUBE_CLIENT_SECRET,
-        "redirect_uri": settings.YOUTUBE_REDIRECT_URI,
+        "redirect_uri": redirect_uri,
         "grant_type": "authorization_code",
     }
     return await _request_tokens(data)

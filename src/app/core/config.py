@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     YOUTUBE_COOKIES_FILE: str | None = None  # Path to cookies.txt file (for production)
     YOUTUBE_CLIENT_ID: str | None = None
     YOUTUBE_CLIENT_SECRET: str | None = None
-    YOUTUBE_REDIRECT_URI: str | None = None
+    YOUTUBE_REDIRECT_PATH: str = "/admin/youtube/callback"
     YOUTUBE_OAUTH_SCOPES: list[str] = [
         "https://www.googleapis.com/auth/youtube.readonly",
         "https://www.googleapis.com/auth/youtube.force-ssl",
@@ -79,6 +79,16 @@ class Settings(BaseSettings):
             self.GOOGLE_REDIRECT_PATH
             if self.GOOGLE_REDIRECT_PATH.startswith("/")
             else f"/{self.GOOGLE_REDIRECT_PATH}"
+        )
+        return f"{base}{path}"
+
+    @property
+    def youtube_redirect_uri(self) -> str:
+        base = self.backend_base_url.rstrip("/")
+        path = (
+            self.YOUTUBE_REDIRECT_PATH
+            if self.YOUTUBE_REDIRECT_PATH.startswith("/")
+            else f"/{self.YOUTUBE_REDIRECT_PATH}"
         )
         return f"{base}{path}"
 

@@ -193,7 +193,7 @@ docker system prune                # Clean up unused Docker resources
   - `API_PORT` (defaults to `8000`).
   Set `API_PORT` per checkout when running multiple instances; Docker Compose inherits it automatically.
 - YouTube download authentication:
-  - `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REDIRECT_URI` configure Google OAuth.
+- `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REDIRECT_PATH` configure Google OAuth. The full redirect URI is derived from `API_SCHEME`/`API_HOST`/`API_PORT`.
   - `YOUTUBE_OAUTH_SCOPES` controls requested scopes (defaults to `youtube.readonly`).
   - Optional `YOUTUBE_COOKIES_FILE` / `YOUTUBE_COOKIES_BROWSER` values fall back to cookie-based auth when OAuth is not configured.
 - Host-port overrides for Docker Compose instances:
@@ -211,8 +211,8 @@ docker system prune                # Clean up unused Docker resources
 Age-restricted / “confirm you’re not a bot” videos require an authenticated YouTube session. Each operator can connect their account via OAuth:
 
 1. Configure the environment:
-   - `YOUTUBE_CLIENT_ID` / `YOUTUBE_CLIENT_SECRET` from the Google Cloud console.
-   - `YOUTUBE_REDIRECT_URI` must match the admin callback (e.g., `http://127.0.0.1:8000/admin/youtube/callback` locally or `https://<your-domain>/admin/youtube/callback` in Fly).
+  - `YOUTUBE_CLIENT_ID` / `YOUTUBE_CLIENT_SECRET` from the Google Cloud console.
+  - `YOUTUBE_REDIRECT_PATH` (default `/admin/youtube/callback`). The full redirect URI automatically includes your current scheme/host/port, so in Google Cloud you’d register `http://127.0.0.1:8010/admin/youtube/callback` locally or `https://<your-domain>/admin/youtube/callback` on Fly.
 2. Restart the API so the new settings load.
 3. In the admin dashboard, click **Connect YouTube** (above the ingest form) and follow Google’s consent screen.
 4. Once connected, downloads run “on behalf of” that user and tokens refresh automatically. Use **Disconnect** to revoke access.

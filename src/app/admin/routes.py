@@ -90,11 +90,7 @@ def _oauth_cookie_settings() -> dict[str, Any]:
 
 
 def _youtube_oauth_configured() -> bool:
-    return bool(
-        settings.YOUTUBE_CLIENT_ID
-        and settings.YOUTUBE_CLIENT_SECRET
-        and settings.YOUTUBE_REDIRECT_URI
-    )
+    return bool(settings.YOUTUBE_CLIENT_ID and settings.YOUTUBE_CLIENT_SECRET)
 
 
 def _redirect_with_message(

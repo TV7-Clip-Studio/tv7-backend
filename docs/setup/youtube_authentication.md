@@ -73,7 +73,7 @@ yt-dlp is a **video downloader**, not an API client. It needs to pretend to be a
    fly secrets set \
      YOUTUBE_CLIENT_ID="your-client-id" \
      YOUTUBE_CLIENT_SECRET="your-secret" \
-     YOUTUBE_REDIRECT_URI="https://your-app.fly.dev/admin/youtube/callback" \
+     YOUTUBE_REDIRECT_PATH="/admin/youtube/callback" \
      -a your-app
    ```
 
@@ -91,9 +91,9 @@ yt-dlp is a **video downloader**, not an API client. It needs to pretend to be a
 
 1. **OAuth** (in `.env`):
    ```bash
-   YOUTUBE_CLIENT_ID=your-client-id
-   YOUTUBE_CLIENT_SECRET=your-secret
-   YOUTUBE_REDIRECT_URI=http://127.0.0.1:8000/admin/youtube/callback
+  YOUTUBE_CLIENT_ID=your-client-id
+  YOUTUBE_CLIENT_SECRET=your-secret
+  YOUTUBE_REDIRECT_PATH=/admin/youtube/callback
    ```
 
 2. **Cookies** (in `.env`):
