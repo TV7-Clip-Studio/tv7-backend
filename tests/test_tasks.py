@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import Any
 
 import pytest
 from sqlalchemy import select
@@ -359,6 +360,58 @@ async def test_render_clip_job_handles_errors(
     await db_session.refresh(clip)
     assert video.status == VideoStatus.ERROR.value
     assert clip.status == ClipStatus.ERROR.value
+
+
+async def test_render_clip_job_uses_thread_pool(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    video = Video(
+        id=300,
+        source_url="https://youtube.com/watch?v=thread",
+        status=VideoStatus.PROCESSING.value,
+        local_path=str(tmp_path / "video.mp4"),
+        render_batch_id="batch",
+    )
+    video.duration_seconds = 60
+    clip = Clip(
+        video_id=video.id,
+        start_sec=0,
+        end_sec=30,
+        status=ClipStatus.RENDERING.value,
+    )
+    db_session.add_all([video, clip])
+    await db_session.commit()
+    monkeypatch.setattr(
+        render_workspace.settings, "MEDIA_STORAGE_DIR", str(tmp_path / "media"), raising=False
+    )
+
+    def fake_render(*_: object, **__: object) -> ClipRenderResult:
+        workspace = render_workspace.get_video_workspace(video.id)
+        paths = workspace.clip_paths(clip.id)
+        paths.final_path.parent.mkdir(parents=True, exist_ok=True)
+        paths.final_path.write_bytes(b"clip")
+        return ClipRenderResult(
+            final_path=paths.final_path,
+            public_url=paths.public_url,
+            width=1080,
+            height=1920,
+            frame_rate=30.0,
+            file_size_bytes=paths.final_path.stat().st_size,
+        )
+
+    monkeypatch.setattr(tasks, "render_clip", fake_render, raising=False)
+
+    called = False
+
+    async def fake_to_thread(func: Any, *args: Any, **kwargs: Any) -> Any:
+        nonlocal called
+        called = True
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(tasks.asyncio, "to_thread", fake_to_thread, raising=False)
+
+    await tasks._render_clip_job(video.id, clip.id, "batch", enqueue_finalize=False)
+    assert called
 
 
 async def test_download_task_skips_when_assets_cached(

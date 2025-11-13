@@ -16,6 +16,7 @@ def _setup_workspace(
 ) -> VideoWorkspace:
     monkeypatch.setattr(clipper.settings, "MEDIA_STORAGE_DIR", str(tmp_path), raising=False)
     workspace = get_video_workspace(video_id)
+    monkeypatch.setattr(clipper, "_probe_dimensions", lambda *_: (1920, 1080))
     return workspace
 
 
@@ -130,6 +131,42 @@ def test_render_clip_reuses_existing_file(tmp_path: Path, monkeypatch: pytest.Mo
     result = render_clip(video, clip, workspace, overwrite=False)
     assert result.file_size_bytes == final_path.stat().st_size
     assert run_calls == 0
+
+
+def test_render_clip_pads_tall_video(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    workspace = _setup_workspace(tmp_path, monkeypatch)
+    monkeypatch.setattr(clipper, "_probe_dimensions", lambda *_: (1080, 2340))
+    source = tmp_path / "tall.mp4"
+    source.write_bytes(b"bytes")
+    video = Video(id=4, source_url="https://youtube.com/watch?v=tall", local_path=str(source))
+    video.duration_seconds = 180
+    clip = Clip(id=8, video_id=4, start_sec=10, end_sec=40)
+
+    recorded_cmd: list[str] = []
+
+    def fake_run(
+        cmd: list[str], check: bool, capture_output: bool, text: bool
+    ) -> subprocess.CompletedProcess[str]:
+        del check, capture_output, text
+        if cmd[0] == clipper.settings.FFMPEG_BIN:
+            recorded_cmd[:] = cmd
+            output = Path(cmd[-1])
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_bytes(b"clip")
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        return subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout='{"streams":[{"width":720,"height":1280,"r_frame_rate":"30/1"}]}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(clipper.subprocess, "run", fake_run)
+    render_clip(video, clip, workspace)
+    vf_index = recorded_cmd.index("-vf")
+    vf_arg = recorded_cmd[vf_index + 1]
+    assert "pad=" in vf_arg
+    assert "crop=" not in vf_arg
 
 
 def test_render_clip_raises_on_ffmpeg_error(

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import subprocess  # nosec B404
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from app.core.config import settings
 from app.db.models import Clip, Video
@@ -49,11 +50,9 @@ def _parse_frame_rate(value: str | None) -> float | None:
         return None
 
 
-def _probe_metadata(
-    path: Path, config: ClipRenderConfig
-) -> tuple[int | None, int | None, float | None]:
+def _probe_stream_info(path: Path, config: ClipRenderConfig) -> dict[str, Any] | None:
     if not path.exists():
-        return None, None, None
+        return None
     cmd = [
         config.ffprobe_bin,
         "-v",
@@ -80,21 +79,36 @@ def _probe_metadata(
             "Failed to probe rendered clip",
             extra={"path": str(path), "stderr": exc.stderr},
         )
-        return None, None, None
+        return None
 
     try:
-        data: dict[str, Any] = json.loads(completed.stdout or "{}")
+        data = cast(dict[str, Any], json.loads(completed.stdout or "{}"))
     except json.JSONDecodeError:
-        return None, None, None
+        return None
 
-    streams = data.get("streams") or []
+    streams = cast(list[dict[str, Any]], data.get("streams") or [])
     if not streams:
+        return None
+    return streams[0]
+
+
+def _probe_metadata(
+    path: Path, config: ClipRenderConfig
+) -> tuple[int | None, int | None, float | None]:
+    stream = _probe_stream_info(path, config)
+    if not stream:
         return None, None, None
-    stream = streams[0]
     width = stream.get("width")
     height = stream.get("height")
     frame_rate = _parse_frame_rate(stream.get("r_frame_rate"))
     return width, height, frame_rate
+
+
+def _probe_dimensions(path: Path, config: ClipRenderConfig) -> tuple[int | None, int | None]:
+    stream = _probe_stream_info(path, config)
+    if not stream:
+        return None, None
+    return stream.get("width"), stream.get("height")
 
 
 def _run_ffmpeg(command: list[str]) -> None:
@@ -112,9 +126,29 @@ def _run_ffmpeg(command: list[str]) -> None:
         raise ClipRenderError(stderr) from exc
 
 
-def _build_video_filter(target_height: int) -> str:
-    # Scale height to target while maintaining aspect, then crop to 9:16.
-    return f"scale=-2:{target_height},crop=ih*9/16:ih"
+def _build_video_filter(
+    target_height: int,
+    *,
+    source_width: int | None = None,
+    source_height: int | None = None,
+) -> str:
+    """Return a vf filter that keeps 9:16 output without exceeding width."""
+
+    base_scale = f"scale=-2:{target_height}"
+    if not source_width or not source_height or source_width <= 0 or source_height <= 0:
+        return f"{base_scale},crop=ih*9/16:ih"
+
+    target_aspect = Fraction(9, 16)
+    scaled_width = Fraction(source_width, source_height) * target_height
+    target_width = target_aspect * target_height
+
+    if scaled_width >= target_width:
+        return f"{base_scale},crop=ih*9/16:ih"
+
+    pad_width = math.ceil(float(target_width))
+    if pad_width % 2:
+        pad_width += 1
+    return f"{base_scale},pad={pad_width}:{target_height}:(ow-iw)/2:(oh-ih)/2"
 
 
 def render_clip(
@@ -136,6 +170,13 @@ def render_clip(
 
     clip_paths = workspace.clip_paths(clip.id)
     clip_paths.final_path.parent.mkdir(parents=True, exist_ok=True)
+
+    source_width, source_height = _probe_dimensions(source_path, cfg)
+    video_filter = _build_video_filter(
+        cfg.target_height,
+        source_width=source_width,
+        source_height=source_height,
+    )
 
     if clip_paths.final_path.exists() and not overwrite:
         width, height, frame_rate = _probe_metadata(clip_paths.final_path, cfg)
@@ -175,7 +216,7 @@ def render_clip(
         "-i",
         str(source_path),
         "-vf",
-        _build_video_filter(cfg.target_height),
+        video_filter,
         "-c:v",
         "libx264",
         "-preset",

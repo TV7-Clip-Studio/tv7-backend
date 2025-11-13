@@ -6,6 +6,7 @@ import threading
 import uuid
 from collections.abc import Coroutine
 from concurrent.futures import Future
+from types import SimpleNamespace
 from typing import Any, TypeVar, cast
 
 from dramatiq import actor
@@ -389,13 +390,33 @@ async def _render_clip_job(
         if not video or not clip_state or video.render_batch_id != batch_id:
             return
         workspace = get_video_workspace(video_id)
+        video_snapshot = cast(
+            Video,
+            SimpleNamespace(
+                id=video.id,
+                local_path=video.local_path,
+                duration_seconds=video.duration_seconds,
+            ),
+        )
+        clip_snapshot = cast(
+            Clip,
+            SimpleNamespace(
+                id=clip_state.id,
+                video_id=clip_state.video_id,
+                start_sec=clip_state.start_sec,
+                end_sec=clip_state.end_sec,
+                status=clip_state.status,
+            ),
+        )
+        overwrite_existing = clip_state.status != ClipStatus.READY.value
 
     try:
-        clip_result = render_clip(
-            video,
-            clip_state,
+        clip_result = await asyncio.to_thread(
+            render_clip,
+            video_snapshot,
+            clip_snapshot,
             workspace,
-            overwrite=clip_state.status != ClipStatus.READY.value,
+            overwrite=overwrite_existing,
         )
     except ClipRenderError as exc:
         async with session_scope() as session:

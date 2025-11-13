@@ -41,7 +41,8 @@ These tables represent the single source of truth for processing state. Backgrou
    - Creates `Clip` rows for each segment with `status=rendering` and stores the hook text in `caption_text`.
 3. **Clip Rendering & Subtitle Styling**
    - `services/clipper.py` shells out to ffmpeg/ffprobe (configurable via `FFMPEG_BIN`/`FFPROBE_BIN`) to slice each segment, clamp durations to `CLIP_MAX_DURATION_SECONDS`, reframe to 9:16, and export mezzanine files before moving them into `/media/clips/{video_id}/{clip_id}.mp4`.
-   - The Dramatiq `render_clips` stage fans out per-clip jobs keyed by a `render_batch_id`, so workers can process clips in parallel; once every clip reaches `ready`, the system automatically enqueues `finalize_video`.
+   - Portrait or ultra-tall sources narrower than 9:16 are automatically padded instead of cropped, preventing ffmpeg “input area out of bounds” failures while still producing 9:16 assets.
+   - The Dramatiq `render_clips` stage fans out per-clip jobs keyed by a `render_batch_id`; each job runs the ffmpeg work in a background thread so multiple clips genuinely render in parallel, and once every clip reaches `ready` the system automatically enqueues `finalize_video`.
    - `services/subtitle_styler.py` (Phase 1.9) will overlay high-contrast subtitles sliced from the transcript segment.
    - Final assets saved to storage; update each `Clip` (`local_path`, `status=ready`).
 4. **Video Completion**
