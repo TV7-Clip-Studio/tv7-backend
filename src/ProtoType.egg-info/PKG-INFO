@@ -10,7 +10,6 @@ Requires-Dist: uvicorn[standard]>=0.30
 Requires-Dist: pydantic[email]>=2.11
 Requires-Dist: pydantic-settings>=2.4
 Requires-Dist: python-dotenv>=1.0
-Requires-Dist: structlog>=24.1
 Requires-Dist: prometheus-fastapi-instrumentator>=7.0
 Requires-Dist: sqlalchemy[asyncio]>=2.0
 Requires-Dist: aiosqlite>=0.19

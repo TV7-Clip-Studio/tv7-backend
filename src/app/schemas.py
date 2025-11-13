@@ -58,6 +58,11 @@ class ClipRead(BaseModel):
     end_sec: int
     local_path: str | None
     caption_text: str | None
+    render_width: int | None = None
+    render_height: int | None = None
+    frame_rate: float | None = None
+    file_size_bytes: int | None = None
+    thumbnail_path: str | None = None
     status: ClipStatus
     created_at: datetime
     updated_at: datetime
@@ -74,6 +79,7 @@ class VideoRead(BaseModel):
     duration_seconds: int | None = None
     file_size_bytes: int | None = None
     error_message: str | None = None
+    workspace_root: str | None = None
     status: VideoStatus
     clip_generation_mode: ClipGenerationMode
     created_at: datetime

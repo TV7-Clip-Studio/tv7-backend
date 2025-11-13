@@ -6,6 +6,7 @@ from enum import Enum
 from sqlalchemy import (
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -131,6 +132,8 @@ class Video(Base):
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     file_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    workspace_root: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    render_batch_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
@@ -171,6 +174,11 @@ class Clip(Base):
     end_sec: Mapped[int] = mapped_column(Integer, nullable=False)
     local_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     caption_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    render_width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    render_height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    frame_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    file_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    thumbnail_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     status: Mapped[str] = mapped_column(
         String(32),
         nullable=False,

@@ -69,6 +69,7 @@ media_dir = Path(settings.MEDIA_STORAGE_DIR)
 media_dir.mkdir(parents=True, exist_ok=True)
 (media_dir / "videos").mkdir(exist_ok=True)
 (media_dir / "clips").mkdir(exist_ok=True)
+(media_dir / "tmp").mkdir(exist_ok=True)
 
 app.mount("/media", StaticFiles(directory=settings.MEDIA_STORAGE_DIR), name="media")
 

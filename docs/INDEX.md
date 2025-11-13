@@ -39,7 +39,7 @@
 
 #### [architecture.md](core/architecture.md)
 **When to read:** Understanding system design, planning new features, onboarding to codebase
-**Covers:** System purpose, domain model (Video/Clip/User), processing pipeline, API endpoints, layering (router→service→repository)
+**Covers:** System purpose, domain model (Video/Clip/User), processing pipeline, media storage & rendering workspace layout, API endpoints, layering (router→service→repository)
 
 #### [tech_stack.md](core/tech_stack.md)
 **When to read:** Need library version info, understanding technology choices, debugging dependencies

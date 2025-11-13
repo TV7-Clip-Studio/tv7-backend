@@ -37,6 +37,9 @@
 - 1.7.c ✅ Create `services/highlight_detector.py` with OpenAI integration, segment validation (15-90s duration), error handling, and ClipSegment dataclass.
 - 1.7.d ✅ Wire highlight detector into task pipeline (`tasks.detect_highlights`); create Clip records with status=RENDERING; handle errors and set Video status=ERROR on failure.
 - 1.8 Build `services/clipper.py` that slices video segments with ffmpeg, converts to 9:16 framing, manages temp files, and hands off to the subtitle renderer.
+  - 1.8.a ✅ Design rendering workspace and storage layout (per-video temp directories, clip output paths, metadata fields) — added `VideoWorkspace` helper, clip render metadata fields, and media directory scaffolding.
+  - 1.8.b ✅ Add ffmpeg-based slicing + reframing, with idempotent handling when clips already exist — implemented `services/clipper.py`, new Dramatiq render stage, and metadata capture on each clip.
+  - 1.8.c ✅ Wire clip rendering jobs into Dramatiq so each Clip transitions from `rendering` to `ready` — introduced per-clip actors with render batches, parallel fan-out, and automatic finalization once all renders succeed.
 - 1.9 Create `services/subtitle_styler.py` to extract transcript snippets, render social-style captions (font, outline, positioning), burn them into the clip, and update `Clip.local_path` + `status=ready`.
 - 1.10 Expose `GET /status/{video_id}` (overall state + per-clip summaries) and `GET /videos/{video_id}/clips` (detailed clip metadata, previews, captions) for polling and UI consumption.
 

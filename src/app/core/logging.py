@@ -39,6 +39,9 @@ def _extract_extra(record: logging.LogRecord) -> dict[str, Any]:
     for key, value in record.__dict__.items():
         if key in _RESERVED_LOG_RECORD_ATTRS:
             continue
+        # Skip None/null values
+        if value is None:
+            continue
         extra[key] = value
     return extra
 
@@ -54,7 +57,6 @@ class AppLogFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:  # noqa: D401
         message = record.getMessage()
         extra = _extract_extra(record)
-        extra.setdefault("logger", record.name)
         extra_json = json.dumps(extra, default=str, ensure_ascii=False) if extra else ""
 
         if self.mode == "minimal":
