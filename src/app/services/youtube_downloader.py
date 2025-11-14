@@ -419,7 +419,8 @@ class _DownloadContext:
 def _log_available_formats(context: _DownloadContext) -> None:
     try:
         opts: dict[str, object] = {"quiet": True, "skip_download": True}
-        _apply_cookie_auth(opts)
+        # Don't use cookies for format logging either
+        # _apply_cookie_auth(opts)
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(context.source_url, download=False)
             formats = info.get("formats") or []
