@@ -530,14 +530,19 @@ def _download_with_fallback_formats(context: _DownloadContext) -> tuple[int, int
     formats_to_try = [BASE_FORMAT, *FALLBACK_FORMATS]
     last_error: FormatUnavailableError | None = None
 
-    for fmt in formats_to_try:
+    for idx, fmt in enumerate(formats_to_try):
         try:
             return _execute_download(context=context, format_string=fmt)
         except FormatUnavailableError as exc:
             last_error = exc
+            next_fmt = formats_to_try[idx + 1] if idx + 1 < len(formats_to_try) else None
             logger.warning(
                 "Requested format unavailable; retrying with fallback",
-                extra={"video_id": context.video_id, "format": fmt},
+                extra={
+                    "video_id": context.video_id,
+                    "failed_format": fmt,
+                    "next_format": next_fmt,
+                },
             )
             continue
 

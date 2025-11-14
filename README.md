@@ -18,6 +18,11 @@ curl http://localhost:8000/health
 
 To stop everything, press `Ctrl+C` or run `make down`.
 
+### Requirements
+
+- **Docker workflow:** Docker + Compose install (Node.js is pre-installed in the image; no extra setup).
+- **Local workflow (without Docker):** Python 3.12, Node.js 18+ (required by yt-dlp to execute YouTube’s player JavaScript and enumerate formats), Postgres 16, and Redis 7.
+
 ### Running multiple local instances
 
 Compose projects are isolated by name and host ports. Override them per instance:
