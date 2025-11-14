@@ -186,10 +186,12 @@ def _apply_cookie_auth(ydl_opts: dict[str, object]) -> None:
         )
 
 
-BASE_FORMAT = "bestvideo[height<=720]+bestaudio/best"
+# Without cookies, default clients provide high quality formats via m3u8 and dash
+# Format priority: m3u8 720p > separate streams 720p > 480p > 360p
+BASE_FORMAT = "95/136+140/94"  # 720p m3u8 OR 720p mp4+audio OR 480p m3u8
 FALLBACK_FORMATS = [
-    "bestvideo+bestaudio/best",
-    "best",
+    "bestvideo[height<=720]+bestaudio/best[height<=720]",
+    "18",  # 360p combined as last resort
 ]
 
 
@@ -205,6 +207,8 @@ def _build_ydl_options(
         "extract_flat": False,
         "max_filesize": max_file_size,
         "prefer_ffmpeg": True,
+        # Don't force specific client - let yt-dlp auto-select (android_sdkless, web_safari)
+        # "extractor_args": {},
         "postprocessors": [
             {
                 "key": "FFmpegVideoConvertor",
@@ -212,7 +216,10 @@ def _build_ydl_options(
             }
         ],
     }
-    _apply_cookie_auth(ydl_opts)
+    # DON'T apply cookies - they cause signature encryption issues
+    # Cookies force web client which requires JS runtime for signature decryption
+    # Without cookies, yt-dlp uses android_sdkless/web_safari which provide HQ formats
+    # _apply_cookie_auth(ydl_opts)
     return ydl_opts
 
 
@@ -409,10 +416,12 @@ class _DownloadContext:
     max_file_size: int
 
 
-def _log_available_formats(source_url: str) -> None:
+def _log_available_formats(context: _DownloadContext) -> None:
     try:
-        with yt_dlp.YoutubeDL({"quiet": True, "skip_download": True}) as ydl:
-            info = ydl.extract_info(source_url, download=False)
+        opts: dict[str, object] = {"quiet": True, "skip_download": True}
+        _apply_cookie_auth(opts)
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(context.source_url, download=False)
             formats = info.get("formats") or []
             preview = [
                 {
@@ -427,7 +436,7 @@ def _log_available_formats(source_url: str) -> None:
             logger.info(
                 "Available YouTube formats",
                 extra={
-                    "source_url": source_url,
+                    "source_url": context.source_url,
                     "total_formats": len(formats),
                     "sample": preview,
                 },
@@ -435,7 +444,7 @@ def _log_available_formats(source_url: str) -> None:
     except Exception as exc:  # pragma: no cover - network access
         logger.warning(
             "Failed to list YouTube formats",
-            extra={"source_url": source_url, "error": str(exc)},
+            extra={"source_url": context.source_url, "error": str(exc)},
         )
 
 
@@ -509,7 +518,7 @@ def _execute_download(
             ) from exc
 
         if "Requested format is not available" in error_msg:
-            _log_available_formats(context.source_url)
+            _log_available_formats(context)
             raise FormatUnavailableError(error_msg) from exc
 
         raise DownloadError(f"Video download failed: {exc}") from exc
