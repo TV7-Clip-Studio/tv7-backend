@@ -82,7 +82,7 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
-    oauth_accounts: Mapped[list[UserOAuthAccount]] = relationship(
+    oauth_accounts: Mapped[list[UserOAuthAccount]] = relationship(  # noqa: UP006
         "UserOAuthAccount",
         back_populates="user",
         cascade="all, delete-orphan",
@@ -119,7 +119,7 @@ class UserOAuthAccount(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
-    user: Mapped[User] = relationship(
+    user: Mapped[User] = relationship(  # noqa: UP006
         "User",
         back_populates="oauth_accounts",
     )
