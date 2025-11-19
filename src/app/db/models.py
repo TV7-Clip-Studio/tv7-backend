@@ -83,6 +83,7 @@ class User(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
     oauth_accounts: Mapped[list[UserOAuthAccount]] = relationship(
+        "UserOAuthAccount",
         back_populates="user",
         cascade="all, delete-orphan",
     )
@@ -118,7 +119,10 @@ class UserOAuthAccount(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
-    user: Mapped[User] = relationship(back_populates="oauth_accounts")
+    user: Mapped[User] = relationship(
+        "User",
+        back_populates="oauth_accounts",
+    )
 
 
 class Video(Base):
