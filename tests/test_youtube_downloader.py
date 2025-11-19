@@ -209,3 +209,53 @@ def test_fetch_transcript_from_captions_api(monkeypatch: pytest.MonkeyPatch) -> 
     )
     assert text == "Hello World"
     assert language == "en"
+
+
+def _make_download_context(tmp_path: Path) -> youtube_downloader._DownloadContext:  # type: ignore[attr-defined]
+    storage_dir = tmp_path / "videos" / "1"
+    storage_dir.mkdir(parents=True)
+    output_template = storage_dir / "source.%(ext)s"
+    final_output = storage_dir / "source.mp4"
+    return youtube_downloader._DownloadContext(  # type: ignore[attr-defined]
+        video_id=1,
+        source_url="https://example.com",
+        storage_dir=storage_dir,
+        output_template=output_template,
+        final_output_path=final_output,
+        max_file_size=10_000,
+    )
+
+
+def test_download_with_fallback_retries(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    context = _make_download_context(tmp_path)
+    calls: list[str] = []
+
+    def fake_execute(*, format_string: str, **__: object) -> tuple[int, int]:
+        calls.append(format_string)
+        if format_string == youtube_downloader.BASE_FORMAT:
+            raise youtube_downloader.FormatUnavailableError("missing")  # type: ignore[attr-defined]
+        context.final_output_path.write_bytes(b"data")
+        return 123, 10
+
+    monkeypatch.setattr(youtube_downloader, "_execute_download", fake_execute)
+    size, duration = youtube_downloader._download_with_fallback_formats(context)  # type: ignore[attr-defined]
+    assert size == 123
+    assert duration == 10
+    assert calls[:2] == [
+        youtube_downloader.BASE_FORMAT,
+        youtube_downloader.FALLBACK_FORMATS[0],
+    ]
+
+
+def test_download_with_fallback_raises_after_exhaustion(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    context = _make_download_context(tmp_path)
+
+    def always_fail(*_: object, **__: object) -> tuple[int, int]:
+        raise youtube_downloader.FormatUnavailableError("missing")  # type: ignore[attr-defined]
+
+    monkeypatch.setattr(youtube_downloader, "_execute_download", always_fail)
+
+    with pytest.raises(youtube_downloader.DownloadError):  # type: ignore[attr-defined]
+        youtube_downloader._download_with_fallback_formats(context)  # type: ignore[attr-defined]

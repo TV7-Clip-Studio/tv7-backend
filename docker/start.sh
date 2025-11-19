@@ -5,7 +5,7 @@ echo "Starting application processes..."
 
 # Start the worker in background
 echo "Starting Dramatiq worker..."
-python -m scripts.run_worker 2>&1 | sed 's/^/[worker] /' &
+python -u -m scripts.run_worker 2>&1 | sed 's/^/[worker] /' &
 WORKER_PID=$!
 echo "Worker started with PID $WORKER_PID"
 

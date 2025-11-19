@@ -18,6 +18,12 @@ curl http://localhost:8000/health
 
 To stop everything, press `Ctrl+C` or run `make down`.
 
+### Requirements
+
+- **Docker workflow:** Docker + Compose install (Node.js is pre-installed in the image; no extra setup).
+- **Local workflow (without Docker):** Python 3.12, Node.js 18+ (required by yt-dlp to execute YouTube’s player JavaScript and enumerate formats), Postgres 16, and Redis 7.
+- *Why we pin yt-dlp to 2025.10.22:* the 2025.11+ releases require the external “EJS” bundle (GitHub-hosted challenge solver scripts) which is currently unavailable in Fly deployments, so we temporarily stay on the last pre-EJS version to keep downloads working. Remove the pin once we can bundle the new solver assets.
+
 ### Running multiple local instances
 
 Compose projects are isolated by name and host ports. Override them per instance:
@@ -187,6 +193,8 @@ docker system prune                # Clean up unused Docker resources
   - `REDIS_URL` (default `redis://localhost:6379/0` locally; `redis://redis:6379/0` in Docker).
   - `DRAMATIQ_BROKER` (`stub` for tests/standalone dev, `redis` when the queue is available). When `stub` is active the entire download + highlight pipeline runs inline inside the API process, so video status transitions (`INGESTED → PROCESSING → READY`) appear immediately for admin operators without running `make worker`.
   - `WORKER_CONCURRENCY` controls the worker pool size.
+  - `CLIP_RENDER_MAX_PARALLEL` limits how many ffmpeg render jobs run at once (default `1` to avoid Fly OOM).
+  - `CLIP_OUTPUT_BITRATE` and `CLIP_RENDER_PRESET` tune ffmpeg quality vs. performance (defaults `5M` + `superfast` for low memory usage).
 - API origin (used for OAuth redirects, UI tests, and Docker port binding):
   - `API_SCHEME` (defaults to `http`).
   - `API_HOST` (defaults to `127.0.0.1`).

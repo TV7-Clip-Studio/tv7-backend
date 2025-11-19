@@ -65,7 +65,7 @@ docker compose restart api worker
 
 ### Step 3: Production (Fly.io)
 
-For Fly.io deployment, you have two options:
+For Fly.io deployment, you have two options. When running outside Docker (e.g., local uvicorn), make sure Node.js 18+ is installed so yt-dlp can execute YouTube’s player JavaScript; the Docker/Fly image already bundles Node.
 
 #### Option A: Use Fly Secrets (Recommended)
 

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from sqlalchemy import select
@@ -412,6 +413,71 @@ async def test_render_clip_job_uses_thread_pool(
 
     await tasks._render_clip_job(video.id, clip.id, "batch", enqueue_finalize=False)
     assert called
+
+
+async def test_render_clip_jobs_respect_semaphore(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    video = Video(
+        id=310,
+        source_url="https://youtube.com/watch?v=semaphore",
+        status=VideoStatus.PROCESSING.value,
+        local_path=str(tmp_path / "video.mp4"),
+        render_batch_id="batch",
+    )
+    video.duration_seconds = 90
+    clip_a = Clip(video_id=video.id, start_sec=0, end_sec=30, status=ClipStatus.RENDERING.value)
+    clip_b = Clip(video_id=video.id, start_sec=30, end_sec=60, status=ClipStatus.RENDERING.value)
+    db_session.add_all([video, clip_a, clip_b])
+    await db_session.commit()
+    monkeypatch.setattr(
+        render_workspace.settings, "MEDIA_STORAGE_DIR", str(tmp_path / "media"), raising=False
+    )
+
+    first_started = threading.Event()
+    release_first = threading.Event()
+    second_started = threading.Event()
+
+    def fake_render(*args: object, **_kwargs: object) -> ClipRenderResult:
+        workspace = render_workspace.get_video_workspace(video.id)
+        clip_snapshot = cast(Clip, args[1])
+        paths = workspace.clip_paths(clip_snapshot.id)  # type: ignore[arg-type]
+        paths.final_path.parent.mkdir(parents=True, exist_ok=True)
+        paths.final_path.write_bytes(b"bytes")
+
+        if not first_started.is_set():
+            first_started.set()
+            release_first.wait()
+        else:
+            second_started.set()
+
+        return ClipRenderResult(
+            final_path=paths.final_path,
+            public_url=paths.public_url,
+            width=1080,
+            height=1920,
+            frame_rate=30.0,
+            file_size_bytes=paths.final_path.stat().st_size,
+        )
+
+    monkeypatch.setattr(tasks, "render_clip", fake_render, raising=False)
+
+    task_one = asyncio.create_task(
+        tasks._render_clip_job(video.id, clip_a.id, "batch", enqueue_finalize=False)
+    )
+    task_two = asyncio.create_task(
+        tasks._render_clip_job(video.id, clip_b.id, "batch", enqueue_finalize=False)
+    )
+
+    try:
+        await asyncio.wait_for(asyncio.to_thread(first_started.wait), timeout=1)
+        await asyncio.sleep(0.1)
+        assert not second_started.is_set()
+    finally:
+        release_first.set()
+
+    await asyncio.gather(task_one, task_two)
+    assert second_started.is_set()
 
 
 async def test_download_task_skips_when_assets_cached(

@@ -4,7 +4,7 @@ import json
 import logging
 import math
 import subprocess  # nosec B404
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, cast
@@ -22,11 +22,12 @@ class ClipRenderError(Exception):
 
 @dataclass(slots=True)
 class ClipRenderConfig:
-    ffmpeg_bin: str = settings.FFMPEG_BIN
-    ffprobe_bin: str = settings.FFPROBE_BIN
-    max_duration_seconds: int = settings.CLIP_MAX_DURATION_SECONDS
-    target_height: int = settings.CLIP_TARGET_HEIGHT
-    output_bitrate: str = settings.CLIP_OUTPUT_BITRATE
+    ffmpeg_bin: str = field(default_factory=lambda: settings.FFMPEG_BIN)
+    ffprobe_bin: str = field(default_factory=lambda: settings.FFPROBE_BIN)
+    max_duration_seconds: int = field(default_factory=lambda: settings.CLIP_MAX_DURATION_SECONDS)
+    target_height: int = field(default_factory=lambda: settings.CLIP_TARGET_HEIGHT)
+    output_bitrate: str = field(default_factory=lambda: settings.CLIP_OUTPUT_BITRATE)
+    preset: str = field(default_factory=lambda: settings.CLIP_RENDER_PRESET)
 
 
 @dataclass(slots=True)
@@ -220,7 +221,7 @@ def render_clip(
         "-c:v",
         "libx264",
         "-preset",
-        "veryfast",
+        cfg.preset,
         "-profile:v",
         "high",
         "-b:v",

@@ -37,7 +37,9 @@ class Settings(BaseSettings):
     MAX_VIDEO_FILE_SIZE_MB: int = 500
     CLIP_MAX_DURATION_SECONDS: int = 60
     CLIP_TARGET_HEIGHT: int = 1920
-    CLIP_OUTPUT_BITRATE: str = "8M"
+    CLIP_OUTPUT_BITRATE: str = "5M"
+    CLIP_RENDER_PRESET: str = "superfast"
+    CLIP_RENDER_MAX_PARALLEL: int = 1
     FFMPEG_BIN: str = "ffmpeg"
     FFPROBE_BIN: str = "ffprobe"
     YOUTUBE_COOKIES_BROWSER: str | None = (

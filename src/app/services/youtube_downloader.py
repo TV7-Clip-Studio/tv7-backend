@@ -32,6 +32,10 @@ class AuthenticationRequiredError(DownloadError):
     """Raised when YouTube requires authentication (age-restricted or sign-in required)."""
 
 
+class FormatUnavailableError(DownloadError):
+    """Raised when the requested format is not offered by the video."""
+
+
 @dataclass(slots=True)
 class DownloadResult:
     """Result of downloading a YouTube video."""
@@ -182,9 +186,20 @@ def _apply_cookie_auth(ydl_opts: dict[str, object]) -> None:
         )
 
 
-def _build_ydl_options(output_template: Path, max_file_size: int) -> dict[str, object]:
+# Without cookies, default clients provide high quality formats via m3u8 and dash
+# Format priority: m3u8 720p > separate streams 720p > 480p > 360p
+BASE_FORMAT = "95/136+140/94"  # 720p m3u8 OR 720p mp4+audio OR 480p m3u8
+FALLBACK_FORMATS = [
+    "bestvideo[height<=720]+bestaudio/best[height<=720]",
+    "18",  # 360p combined as last resort
+]
+
+
+def _build_ydl_options(
+    output_template: Path, max_file_size: int, *, format_string: str
+) -> dict[str, object]:
     ydl_opts: dict[str, object] = {
-        "format": "bestvideo[height<=720]+bestaudio/best",
+        "format": format_string,
         "merge_output_format": "mp4",
         "outtmpl": str(output_template),
         "quiet": True,
@@ -192,6 +207,8 @@ def _build_ydl_options(output_template: Path, max_file_size: int) -> dict[str, o
         "extract_flat": False,
         "max_filesize": max_file_size,
         "prefer_ffmpeg": True,
+        # Don't force specific client - let yt-dlp auto-select (android_sdkless, web_safari)
+        # "extractor_args": {},
         "postprocessors": [
             {
                 "key": "FFmpegVideoConvertor",
@@ -199,7 +216,10 @@ def _build_ydl_options(output_template: Path, max_file_size: int) -> dict[str, o
             }
         ],
     }
-    _apply_cookie_auth(ydl_opts)
+    if settings.YOUTUBE_COOKIES_FILE or settings.YOUTUBE_COOKIES_BROWSER:
+        # Only apply cookies when a path or browser is configured; requires Node.js in
+        # the container so yt-dlp can execute YouTube's player JavaScript.
+        _apply_cookie_auth(ydl_opts)
     return ydl_opts
 
 
@@ -391,20 +411,61 @@ class _DownloadContext:
     video_id: int
     source_url: str
     storage_dir: Path
+    output_template: Path
     final_output_path: Path
     max_file_size: int
+
+
+def _log_available_formats(context: _DownloadContext) -> None:
+    try:
+        opts: dict[str, object] = {"quiet": True, "skip_download": True}
+        # Don't use cookies for format logging either
+        # _apply_cookie_auth(opts)
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(context.source_url, download=False)
+            formats = info.get("formats") or []
+            preview = [
+                {
+                    "format_id": fmt.get("format_id"),
+                    "ext": fmt.get("ext"),
+                    "height": fmt.get("height"),
+                    "width": fmt.get("width"),
+                    "note": fmt.get("format_note"),
+                }
+                for fmt in formats[:10]
+            ]
+            logger.info(
+                "Available YouTube formats",
+                extra={
+                    "source_url": context.source_url,
+                    "total_formats": len(formats),
+                    "sample": preview,
+                },
+            )
+    except Exception as exc:  # pragma: no cover - network access
+        logger.warning(
+            "Failed to list YouTube formats",
+            extra={"source_url": context.source_url, "error": str(exc)},
+        )
 
 
 def _execute_download(
     *,
     context: _DownloadContext,
-    ydl_opts: dict[str, object],
+    format_string: str,
 ) -> tuple[int, int]:
+    ydl_opts = _build_ydl_options(
+        context.output_template, context.max_file_size, format_string=format_string
+    )
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             logger.info(
                 "Starting video download",
-                extra={"video_id": context.video_id, "source_url": context.source_url},
+                extra={
+                    "video_id": context.video_id,
+                    "source_url": context.source_url,
+                    "format": format_string,
+                },
             )
 
             info: dict[str, Any] | None = ydl.extract_info(context.source_url, download=True)
@@ -457,6 +518,10 @@ def _execute_download(
                 "YOUTUBE_COOKIES_B64 secret. See docs/setup/youtube_cookies_setup.md"
             ) from exc
 
+        if "Requested format is not available" in error_msg:
+            _log_available_formats(context)
+            raise FormatUnavailableError(error_msg) from exc
+
         raise DownloadError(f"Video download failed: {exc}") from exc
     except Exception as exc:
         logger.exception(
@@ -469,6 +534,35 @@ def _execute_download(
         )
         _cleanup_partial_file(context.final_output_path)
         raise DownloadError(f"Unexpected download error: {exc}") from exc
+
+
+def _download_with_fallback_formats(context: _DownloadContext) -> tuple[int, int]:
+    formats_to_try = [BASE_FORMAT, *FALLBACK_FORMATS]
+    last_error: FormatUnavailableError | None = None
+
+    for idx, fmt in enumerate(formats_to_try):
+        try:
+            return _execute_download(context=context, format_string=fmt)
+        except FormatUnavailableError as exc:
+            last_error = exc
+            next_fmt = formats_to_try[idx + 1] if idx + 1 < len(formats_to_try) else None
+            logger.warning(
+                "Requested format unavailable; retrying with fallback",
+                extra={
+                    "video_id": context.video_id,
+                    "failed_format": fmt,
+                    "next_format": next_fmt,
+                },
+            )
+            continue
+
+    if last_error is not None:
+        raise DownloadError(
+            f"No compatible YouTube formats were available (tried {formats_to_try})"
+        ) from last_error
+
+    # Should not reach here, but raise generic error just in case.
+    raise DownloadError("Video download failed before attempting any formats")
 
 
 def _safe_transcript_lookup(
@@ -500,16 +594,15 @@ def download_video_and_transcript(
     """
     storage_dir, output_template, final_output_path = _prepare_storage_paths(video_id)
     max_file_size = settings.MAX_VIDEO_FILE_SIZE_MB * 1024 * 1024
-    ydl_opts = _build_ydl_options(output_template, max_file_size)
-    _attach_bearer_token(ydl_opts, access_token)
     context = _DownloadContext(
         video_id=video_id,
         source_url=source_url,
         storage_dir=storage_dir,
+        output_template=output_template,
         final_output_path=final_output_path,
         max_file_size=max_file_size,
     )
-    file_size, duration = _execute_download(context=context, ydl_opts=ydl_opts)
+    file_size, duration = _download_with_fallback_formats(context)
     transcript, transcript_language = _safe_transcript_lookup(source_url, access_token=access_token)
     logger.info(
         "Transcript lookup complete",
