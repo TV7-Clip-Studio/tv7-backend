@@ -7,6 +7,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import UploadFile
+from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from app.core.config import settings
 
@@ -33,7 +34,9 @@ class StoredUpload:
     checksum: str
 
 
-async def persist_upload_temporarily(upload: UploadFile) -> StoredUpload:
+async def persist_upload_temporarily(
+    upload: UploadFile | StarletteUploadFile,
+) -> StoredUpload:
     """
     Stream the uploaded file to disk and return metadata for downstream processing.
 

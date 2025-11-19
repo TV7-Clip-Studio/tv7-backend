@@ -15,7 +15,7 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from app.core.config import settings
 from app.core.jwt import JWTDecodeError, TokenType
-from app.db.models import ClipGenerationMode, User
+from app.db.models import ClipGenerationMode, User, VideoIngestType, VideoStatus
 from app.deps.db import (
     get_user_repository,
     get_video_repository,
@@ -34,6 +34,7 @@ from app.services.auth import (
     issue_tokens_for_user,
     resolve_user_from_token,
 )
+from app.services.ingest import enqueue_video
 from app.services.storage import delete_video_media
 from app.services.upload_storage import (
     UploadError,
@@ -528,12 +529,21 @@ async def request_more_highlights(
     if not video:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found")
 
-    await ingest_video(
-        video.source_url,
-        video_repo,
-        requested_by_user_id=user.id,
-        clip_mode=ClipGenerationMode.APPEND,
-    )
+    ingest_type = VideoIngestType(video.ingest_type)
+    if ingest_type == VideoIngestType.YOUTUBE:
+        await ingest_video(
+            video.source_url,
+            video_repo,
+            requested_by_user_id=user.id,
+            clip_mode=ClipGenerationMode.APPEND,
+        )
+    else:
+        video.clip_generation_mode = ClipGenerationMode.APPEND.value
+        video.status = VideoStatus.INGESTED.value
+        video.error_message = None
+        await video_repo.commit()
+        await enqueue_video(video.id, source_url=video.source_url, user_id=user.id)
+
     return _redirect_with_message(
         f"/admin/videos/{video_id}", "Requested additional highlights. Queueing now."
     )

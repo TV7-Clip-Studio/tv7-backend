@@ -9,7 +9,14 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.admin.routes import SESSION_COOKIE_NAME
-from app.db.models import Clip, ClipGenerationMode, ClipStatus, Video, VideoStatus
+from app.db.models import (
+    Clip,
+    ClipGenerationMode,
+    ClipStatus,
+    Video,
+    VideoIngestType,
+    VideoStatus,
+)
 from app.services import videos as video_service
 from app.services.upload_storage import StoredUpload
 
@@ -333,6 +340,48 @@ async def test_request_more_highlights_queues_append_mode(
 
     await db_session.refresh(video)
     assert video.clip_generation_mode == ClipGenerationMode.APPEND.value
+
+
+@pytest.mark.anyio
+async def test_request_more_highlights_handles_uploads(
+    app_client: AsyncClient,
+    system_login_credentials: tuple[str, str],
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video = Video(
+        source_url="upload://example",
+        ingest_type=VideoIngestType.UPLOAD.value,
+        status=VideoStatus.READY.value,
+        local_path="/tmp/video.mp4",
+        clip_generation_mode=ClipGenerationMode.REPLACE.value,
+    )
+    db_session.add(video)
+    await db_session.commit()
+    await db_session.refresh(video)
+
+    enqueue_mock = AsyncMock()
+    monkeypatch.setattr("app.admin.routes.enqueue_video", enqueue_mock, raising=False)
+
+    email, password = system_login_credentials
+    login_response = await app_client.post(
+        "/admin/login",
+        data={"email": email, "password": password},
+        follow_redirects=False,
+    )
+    app_client.cookies.update(login_response.cookies)
+
+    response = await app_client.post(
+        f"/admin/videos/{video.id}/more-highlights",
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert "Queueing" in response.headers["location"]
+    enqueue_mock.assert_awaited_once()
+
+    await db_session.refresh(video)
+    assert video.clip_generation_mode == ClipGenerationMode.APPEND.value
+    assert video.status == VideoStatus.INGESTED.value
 
 
 @pytest.mark.anyio
