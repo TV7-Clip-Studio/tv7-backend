@@ -13,6 +13,7 @@ from dramatiq import actor
 from dramatiq.middleware import CurrentMessage
 from sqlalchemy import delete, func, select
 
+from app.core.config import settings
 from app.db.base import session_scope
 from app.db.models import Clip, ClipGenerationMode, ClipStatus, Video, VideoStatus
 from app.repositories.youtube_credentials import YouTubeCredentialRepository
@@ -32,6 +33,7 @@ logger = logging.getLogger(__name__)
 _broker = get_broker()
 _loop_lock = threading.Lock()
 _worker_loop: asyncio.AbstractEventLoop | None = None
+_render_semaphore = threading.Semaphore(max(1, settings.CLIP_RENDER_MAX_PARALLEL))
 T = TypeVar("T")
 
 
@@ -410,14 +412,17 @@ async def _render_clip_job(
         )
         overwrite_existing = clip_state.status != ClipStatus.READY.value
 
+    def _render_with_semaphore() -> Any:
+        with _render_semaphore:
+            return render_clip(
+                video_snapshot,
+                clip_snapshot,
+                workspace,
+                overwrite=overwrite_existing,
+            )
+
     try:
-        clip_result = await asyncio.to_thread(
-            render_clip,
-            video_snapshot,
-            clip_snapshot,
-            workspace,
-            overwrite=overwrite_existing,
-        )
+        clip_result = await asyncio.to_thread(_render_with_semaphore)
     except ClipRenderError as exc:
         async with session_scope() as session:
             video = await session.get(Video, video_id)

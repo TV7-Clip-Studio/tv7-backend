@@ -187,3 +187,46 @@ def test_render_clip_raises_on_ffmpeg_error(
     monkeypatch.setattr(clipper.subprocess, "run", fake_run)
     with pytest.raises(ClipRenderError):
         render_clip(video, clip, workspace, overwrite=True)
+
+
+def test_render_clip_honors_configured_preset_and_bitrate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = _setup_workspace(tmp_path, monkeypatch, video_id=42)
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"video")
+
+    video = Video(id=42, source_url="https://youtube.com/watch?v=config", local_path=str(source))
+    video.duration_seconds = 60
+    clip = Clip(id=15, video_id=42, start_sec=0, end_sec=30)
+
+    monkeypatch.setattr(clipper.settings, "CLIP_OUTPUT_BITRATE", "3M", raising=False)
+    monkeypatch.setattr(clipper.settings, "CLIP_RENDER_PRESET", "faster", raising=False)
+
+    captured_cmd: list[str] = []
+
+    def fake_run(
+        cmd: list[str], check: bool, capture_output: bool, text: bool
+    ) -> subprocess.CompletedProcess[str]:
+        del check, capture_output, text
+        if cmd[0] == clipper.settings.FFMPEG_BIN:
+            captured_cmd[:] = cmd
+            output = Path(cmd[-1])
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_bytes(b"clip-bytes")
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        return subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout='{"streams":[{"width":1080,"height":1920,"r_frame_rate":"30/1"}]}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(clipper.subprocess, "run", fake_run)
+    render_clip(video, clip, workspace, overwrite=True)
+
+    assert captured_cmd, "ffmpeg was not invoked"
+    preset_index = captured_cmd.index("-preset")
+    bitrate_index = captured_cmd.index("-b:v")
+    assert captured_cmd[preset_index + 1] == "faster"
+    assert captured_cmd[bitrate_index + 1] == "3M"

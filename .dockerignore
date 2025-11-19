@@ -12,3 +12,4 @@ dist/
 build/
 *.egg-info/
 youtube_cookies.txt
+youtube_cookies_b64.txt

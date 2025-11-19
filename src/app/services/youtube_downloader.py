@@ -216,10 +216,10 @@ def _build_ydl_options(
             }
         ],
     }
-    # DON'T apply cookies - they cause signature encryption issues
-    # Cookies force web client which requires JS runtime for signature decryption
-    # Without cookies, yt-dlp uses android_sdkless/web_safari which provide HQ formats
-    # _apply_cookie_auth(ydl_opts)
+    if settings.YOUTUBE_COOKIES_FILE or settings.YOUTUBE_COOKIES_BROWSER:
+        # Only apply cookies when a path or browser is configured; requires Node.js in
+        # the container so yt-dlp can execute YouTube's player JavaScript.
+        _apply_cookie_auth(ydl_opts)
     return ydl_opts
 
 
