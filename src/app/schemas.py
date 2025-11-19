@@ -5,7 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.core.jwt import TokenType
-from app.db.models import ClipGenerationMode, ClipStatus, VideoStatus
+from app.db.models import ClipGenerationMode, ClipStatus, VideoIngestType, VideoStatus
 
 
 class Health(BaseModel):
@@ -74,6 +74,10 @@ class VideoRead(BaseModel):
     id: int
     source_url: str
     local_path: str | None
+    ingest_type: VideoIngestType
+    original_filename: str | None = None
+    upload_checksum: str | None = None
+    upload_file_size_bytes: int | None = None
     transcript_text: str | None
     transcript_language: str | None = None
     duration_seconds: int | None = None

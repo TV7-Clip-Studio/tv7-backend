@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     MEDIA_STORAGE_DIR: str = "./media"
     VIDEO_QUALITY: str = "720p"
     MAX_VIDEO_FILE_SIZE_MB: int = 500
+    UPLOAD_MAX_FILE_SIZE_MB: int = 4096
+    UPLOAD_NORMALIZED_MAX_HEIGHT: int = 1080
+    UPLOAD_NORMALIZED_VIDEO_BITRATE: str = "5M"
+    UPLOAD_NORMALIZED_AUDIO_BITRATE: str = "192k"
     CLIP_MAX_DURATION_SECONDS: int = 60
     CLIP_TARGET_HEIGHT: int = 1920
     CLIP_OUTPUT_BITRATE: str = "5M"
@@ -54,6 +58,10 @@ class Settings(BaseSettings):
         "https://www.googleapis.com/auth/youtube.force-ssl",
     ]
     OPENAI_API_KEY: str | None = None
+    WHISPER_MODEL_NAME: str = "small"
+    WHISPER_DEVICE: str = "cpu"
+    WHISPER_COMPUTE_TYPE: str = "int8"
+    WHISPER_LANGUAGE: str | None = None
     GOOGLE_CLIENT_ID: str | None = None
     GOOGLE_CLIENT_SECRET: str | None = None
     GOOGLE_REDIRECT_PATH: str = "/api/v1/auth/google/callback"

@@ -15,30 +15,43 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "videos",
-        sa.Column("workspace_root", sa.String(length=1024), nullable=True),
-    )
-    op.add_column(
-        "clips",
-        sa.Column("render_width", sa.Integer(), nullable=True),
-    )
-    op.add_column(
-        "clips",
-        sa.Column("render_height", sa.Integer(), nullable=True),
-    )
-    op.add_column(
-        "clips",
-        sa.Column("frame_rate", sa.Float(), nullable=True),
-    )
-    op.add_column(
-        "clips",
-        sa.Column("file_size_bytes", sa.Integer(), nullable=True),
-    )
-    op.add_column(
-        "clips",
-        sa.Column("thumbnail_path", sa.String(length=1024), nullable=True),
-    )
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+
+    video_columns = {col["name"] for col in inspector.get_columns("videos")}
+    clip_columns = {col["name"] for col in inspector.get_columns("clips")}
+
+    if "workspace_root" not in video_columns:
+        op.add_column(
+            "videos",
+            sa.Column("workspace_root", sa.String(length=1024), nullable=True),
+        )
+
+    if "render_width" not in clip_columns:
+        op.add_column(
+            "clips",
+            sa.Column("render_width", sa.Integer(), nullable=True),
+        )
+    if "render_height" not in clip_columns:
+        op.add_column(
+            "clips",
+            sa.Column("render_height", sa.Integer(), nullable=True),
+        )
+    if "frame_rate" not in clip_columns:
+        op.add_column(
+            "clips",
+            sa.Column("frame_rate", sa.Float(), nullable=True),
+        )
+    if "file_size_bytes" not in clip_columns:
+        op.add_column(
+            "clips",
+            sa.Column("file_size_bytes", sa.Integer(), nullable=True),
+        )
+    if "thumbnail_path" not in clip_columns:
+        op.add_column(
+            "clips",
+            sa.Column("thumbnail_path", sa.String(length=1024), nullable=True),
+        )
 
 
 def downgrade() -> None:

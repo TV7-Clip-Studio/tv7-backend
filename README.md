@@ -185,6 +185,12 @@ docker compose down -v             # Stop and remove volumes (fresh DB)
 docker system prune                # Clean up unused Docker resources
 ```
 
+### Video Ingestion Options
+
+- **YouTube links:** `POST /api/v1/videos/ingest/youtube` accepts JSON `{ "youtube_url": "...", "append_clips": false }` and re-queues existing videos instead of duplicating rows.
+- **Direct uploads:** `POST /api/v1/videos/ingest/upload` accepts `multipart/form-data` with a `file` field (and optional `append_clips` form flag). Uploaded videos are written to disk, resampled to the configured profile (`UPLOAD_NORMALIZED_*` settings), and then treated the same as downloaded sources.
+- The admin dashboard mirrors these choices via a toggle that switches between the URL form and the upload picker. Large uploads are automatically resampled before the pipeline runs so operators can safely drop big mezzanine files without exhausting storage.
+
 ## Environment
 
 - `BETA_API_KEY` enables the beta API guard (required for `/api/v1/ai` locally and in Fly secrets).
@@ -204,6 +210,11 @@ docker system prune                # Clean up unused Docker resources
 - `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REDIRECT_PATH` configure Google OAuth. The full redirect URI is derived from `API_SCHEME`/`API_HOST`/`API_PORT`.
   - `YOUTUBE_OAUTH_SCOPES` controls requested scopes (defaults to `youtube.readonly`).
   - Optional `YOUTUBE_COOKIES_FILE` / `YOUTUBE_COOKIES_BROWSER` values fall back to cookie-based auth when OAuth is not configured.
+- Local transcription runs via [faster-whisper](https://github.com/SYSTRAN/faster-whisper). Configure with:
+  - `WHISPER_MODEL_NAME` (e.g., `small`, `medium`, `large-v3`)
+  - `WHISPER_DEVICE` (`cpu` or `cuda`)
+  - `WHISPER_COMPUTE_TYPE` (e.g., `int8`, `float16`)
+  - Optional `WHISPER_LANGUAGE` to force a specific language.
 - Host-port overrides for Docker Compose instances:
   - `POSTGRES_PORT` (defaults to `5432`).
   - `REDIS_PORT` (defaults to `6379`).

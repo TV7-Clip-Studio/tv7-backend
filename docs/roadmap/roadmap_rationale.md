@@ -78,7 +78,7 @@
 
 ### 1.2 — `POST /videos/ingest` ✅
 - **Why:** Entry point for the entire pipeline; must validate inputs and return quickly.
-- **Implementation overview:** Added `/api/v1/videos/ingest` (protected by the beta key) that accepts a YouTube URL, validates the domain, upserts a `Video` row with `status=ingested`, and hands off to `services.ingest.enqueue_video` (placeholder until Phase 1.3). Responses include the Pydantic `VideoRead` payload plus `created/queued` flags.
+- **Implementation overview:** Added `/api/v1/videos/ingest` (now `/api/v1/videos/ingest/youtube`) that accepts a YouTube URL, validates the domain, upserts a `Video` row with `status=ingested`, and hands off to `services.ingest.enqueue_video` (placeholder until Phase 1.3). Responses include the Pydantic `VideoRead` payload plus `created/queued` flags.
 - **Important:** Duplicate submissions re-queue existing videos without creating new rows. Validation rejects non-YouTube URLs with 422. The enqueue function currently logs; replace with real queue dispatch during Phase 1.3.
 
 ### 1.3 — Background execution infrastructure (Dramatiq + Redis) ✅
@@ -146,7 +146,7 @@
 
 ### 1.12 — Admin ingestion workflow
 - **Why:** Operators need a single dashboard to start processing without touching API clients.
-- **Implementation overview:** Add `/admin/videos/new` view or inline form on `/admin/videos` that accepts a YouTube URL, posts to `POST /videos/ingest`, and displays success/error messaging. Trigger status polling so the page reflects progression without manual refresh.
+- **Implementation overview:** Add `/admin/videos/new` view or inline form on `/admin/videos` that accepts a YouTube URL (and now toggles to a file upload), posts to the ingest endpoint, and displays success/error messaging. Trigger status polling so the page reflects progression without manual refresh.
 - **Important:** Validate inputs client-side and server-side. Surface existing video conflicts with actionable guidance (link to current record, option to reprocess).
 
 ## Phase 2 — Operational Polish

@@ -9,11 +9,20 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Clip, ClipGenerationMode, ClipStatus, Video, VideoStatus
+from app.db.models import (
+    Clip,
+    ClipGenerationMode,
+    ClipStatus,
+    Video,
+    VideoIngestType,
+    VideoStatus,
+)
 from app.services import render_workspace, tasks
 from app.services.clipper import ClipRenderError, ClipRenderResult
 from app.services.highlight_detector import ClipSegment, HighlightDetectionError
 from app.services.render_workspace import VideoWorkspace
+from app.services.transcription import TranscriptResult
+from app.services.video_normalizer import VideoNormalizationResult
 from app.services.youtube_downloader import DownloadError, DownloadResult
 
 pytestmark = pytest.mark.asyncio
@@ -198,6 +207,53 @@ async def test_detect_highlights_replaces_existing_clips(
     assert len(rows) == 1
     assert rows[0].start_sec == 60
     assert video.clip_generation_mode == ClipGenerationMode.REPLACE.value
+
+
+async def test_download_video_task_handles_upload_ingest(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    upload_path = tmp_path / "incoming.mov"
+    upload_path.write_bytes(b"raw")
+
+    video = Video(
+        source_url="upload://example",
+        status=VideoStatus.INGESTED.value,
+        ingest_type=VideoIngestType.UPLOAD.value,
+        clip_generation_mode=ClipGenerationMode.REPLACE.value,
+        upload_original_path=str(upload_path),
+    )
+    db_session.add(video)
+    await db_session.flush()
+    await db_session.refresh(video)
+
+    def fake_normalize(video_id: int, source_path: Path) -> VideoNormalizationResult:
+        destination_dir = tmp_path / "videos" / str(video_id)
+        destination_dir.mkdir(parents=True, exist_ok=True)
+        final = destination_dir / "source.mp4"
+        final.write_bytes(b"normalized")
+        Path(source_path).unlink(missing_ok=True)
+        return VideoNormalizationResult(
+            normalized_path=str(final),
+            file_size_bytes=final.stat().st_size,
+            duration_seconds=130,
+        )
+
+    async def fake_transcribe(_: str) -> TranscriptResult:
+        return TranscriptResult(text="hola mundo", language_code="es")
+
+    monkeypatch.setattr(tasks, "normalize_uploaded_video", fake_normalize, raising=False)
+    monkeypatch.setattr(tasks, "transcribe_video_file", fake_transcribe, raising=False)
+
+    await tasks._download_video_task(video.id)
+    await db_session.refresh(video)
+
+    assert video.local_path and video.local_path.endswith("source.mp4")
+    assert video.duration_seconds == 130
+    assert video.transcript_text == "hola mundo"
+    assert video.transcript_language == "es"
+    assert video.upload_original_path is None
 
 
 async def test_detect_highlights_append_mode_appends(

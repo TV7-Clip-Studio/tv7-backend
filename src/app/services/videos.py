@@ -6,10 +6,19 @@ from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import urlparse
+from uuid import uuid4
 
-from app.db.models import Clip, ClipGenerationMode, ClipStatus, Video, VideoStatus
+from app.db.models import (
+    Clip,
+    ClipGenerationMode,
+    ClipStatus,
+    Video,
+    VideoIngestType,
+    VideoStatus,
+)
 from app.repositories.videos import VideoRepository
 from app.services.ingest import enqueue_video
+from app.services.upload_storage import StoredUpload
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +27,10 @@ YOUTUBE_DOMAINS = {"youtube.com", "www.youtube.com", "youtu.be", "m.youtube.com"
 
 class InvalidYouTubeURL(ValueError):
     """Raised when an ingest request does not target a supported YouTube domain."""
+
+
+class UploadIngestError(ValueError):
+    """Raised when the uploaded file cannot be ingested."""
 
 
 @dataclass(slots=True)
@@ -93,6 +106,7 @@ async def ingest_video(
         video = Video(
             source_url=youtube_url,
             status=VideoStatus.INGESTED.value,
+            ingest_type=VideoIngestType.YOUTUBE.value,
             requested_by_user_id=requested_by_user_id,
             clip_generation_mode=clip_mode.value,
         )
@@ -118,6 +132,47 @@ async def ingest_video(
     video = await repo.refresh(video)
 
     return VideoIngestionResult(video=video, created=created)
+
+
+async def ingest_uploaded_video(
+    upload: StoredUpload,
+    repo: VideoRepository,
+    *,
+    requested_by_user_id: int | None = None,
+    clip_mode: ClipGenerationMode = ClipGenerationMode.REPLACE,
+    task_dispatcher: Callable[[int, str, int | None], Awaitable[None]] | None = None,
+) -> VideoIngestionResult:
+    if not upload.temp_path.exists():
+        raise UploadIngestError("Uploaded file missing from storage")
+
+    video = Video(
+        source_url=f"upload://{uuid4().hex}",
+        status=VideoStatus.INGESTED.value,
+        ingest_type=VideoIngestType.UPLOAD.value,
+        original_filename=upload.original_filename,
+        upload_checksum=upload.checksum,
+        upload_file_size_bytes=upload.file_size_bytes,
+        upload_original_path=str(upload.temp_path),
+        requested_by_user_id=requested_by_user_id,
+        clip_generation_mode=clip_mode.value,
+    )
+    await repo.add(video)
+    video = await repo.refresh(video)
+    logger.info(
+        "Created upload video record",
+        extra={
+            "video_id": video.id,
+            "user_id": requested_by_user_id,
+            "upload_filename": upload.original_filename,
+            "file_size_bytes": upload.file_size_bytes,
+        },
+    )
+
+    await repo.commit()
+    dispatcher = task_dispatcher or _default_dispatch
+    await dispatcher(video.id, video.source_url, requested_by_user_id)
+    video = await repo.refresh(video)
+    return VideoIngestionResult(video=video, created=True)
 
 
 def _summarize_clips(clips: Iterable[Clip]) -> ClipSummary:

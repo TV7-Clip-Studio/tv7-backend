@@ -6,8 +6,10 @@ TV7 is a FastAPI service that turns long-form YouTube videos into ready-to-publi
 ## Core Domain Model
 - **Video**
   - `id`: primary key.
-  - `source_url`: original YouTube link.
+  - `source_url`: original YouTube link or internal `upload://` identifier (for operator uploads).
   - `local_path`: filesystem or object-storage location of the downloaded full-length video.
+  - `ingest_type`: `"youtube"` or `"upload"` so workers know whether to run yt-dlp or the upload normalizer.
+  - `original_filename`, `upload_checksum`, `upload_file_size_bytes`: metadata captured for uploaded sources.
   - `transcript_text`: full combined transcript/closed captions.
   - `status`: lifecycle state (`ingested`, `processing`, `ready`, `error`).
   - `created_at` / `updated_at`: timestamps.
@@ -31,10 +33,11 @@ These tables represent the single source of truth for processing state. Backgrou
 
 ## Processing Pipeline
 1. **Ingestion**
-   - Endpoint `/videos/ingest` accepts `{ "youtube_url": "..." }`.
-   - Creates a `Video` row (`status=ingested`) and enqueues the full pipeline.
-   - `services/youtube_downloader.py` downloads the best-available video stream plus captions/transcripts, returning local file paths and transcript text.
-   - Persist `local_path` and `transcript_text` on the `Video`.
+   - `POST /videos/ingest/youtube` accepts `{ "youtube_url": "..." }` (JSON) and re-queues existing rows instead of duplicating them.
+   - `POST /videos/ingest/upload` accepts `multipart/form-data` with `file` + optional `append_clips`. Uploads are streamed to disk, hashed, and normalized by `services/video_normalizer.py` (ffmpeg) before being treated like any other source.
+   - Both endpoints create a `Video` row (`status=ingested`) and enqueue the full pipeline.
+- `services/youtube_downloader.py` handles remote downloads + transcripts, while uploads skip that step because the normalized asset already lives on disk.
+- Persist `local_path`, transcript metadata (from YouTube or the local Whisper transcriber), and file sizes on the `Video`.
 2. **Highlight Detection**
    - `services/highlight_detector.py` sends the transcript to the LLM.
    - Response yields 3–5 segments with `{start_sec, end_sec, hook}`.
@@ -55,11 +58,11 @@ These tables represent the single source of truth for processing state. Backgrou
 The pipeline must execute outside the request/response loop (Celery/RQ/Dramatiq/background tasks). Failures should set the relevant status to `error` and surface diagnostic information for operators.
 
 ## API Surface
-- `POST /videos/ingest` — queue processing for a YouTube URL. Returns `{ "video_id": ..., "status": "queued" }`.
+- `POST /videos/ingest/youtube` — queue processing for a YouTube URL (returns the canonical `VideoRead` payload plus `created/queued` flags).
+- `POST /videos/ingest/upload` — accept multipart video uploads, normalize them, and enqueue the same pipeline used for downloads.
 - `GET /status/{video_id}` — poll overall video status plus per-clip progress snapshots.
 - `GET /videos/{video_id}/clips` — list generated clips with timing, caption text, preview URLs/paths, and status.
 - `POST /clips/{clip_id}/publish` — create `PublishJob` records and trigger (stubbed) publishing automation.
-- `POST /videos/ingest` — accept a YouTube URL, persist the `Video` row (`status=ingested`), and enqueue the background pipeline.
 - `GET /admin/videos` — HTML dashboard of videos, statuses, and navigation to detail view.
 - `GET /admin/videos/{video_id}` — HTML per-video view showing clip previews, metadata, and publish buttons hooked to the publish endpoint.
 - All admin-prefixed routes require HTTP Basic auth; credentials are supplied via `ADMIN_USERNAME`/`ADMIN_PASSWORD` environment variables.

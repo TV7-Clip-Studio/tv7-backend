@@ -26,7 +26,7 @@ class TestVideoIngestSystem:
         monkeypatch.setattr(video_service, "enqueue_video", enqueue_mock)
 
         response = await system_client.post(
-            "/api/v1/videos/ingest",
+            "/api/v1/videos/ingest/youtube",
             json={"youtube_url": "https://www.youtube.com/watch?v=abc123"},
         )
         assert response.status_code == 202
@@ -58,7 +58,7 @@ class TestVideoIngestSystem:
         monkeypatch.setattr(video_service, "enqueue_video", enqueue_mock)
 
         response = await system_client.post(
-            "/api/v1/videos/ingest",
+            "/api/v1/videos/ingest/youtube",
             json={"youtube_url": "https://youtu.be/abc123"},
         )
         assert response.status_code == 202
@@ -79,7 +79,7 @@ class TestVideoIngestSystem:
         await db_session.commit()
 
         response = await system_client.post(
-            "/api/v1/videos/ingest",
+            "/api/v1/videos/ingest/youtube",
             json={"youtube_url": "https://example.com/video"},
         )
         assert response.status_code == 422
