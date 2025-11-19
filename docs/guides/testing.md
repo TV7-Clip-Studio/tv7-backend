@@ -37,13 +37,62 @@ Tag them with `@pytest.mark.system` (registered in `pyproject.toml`) so they can
 
 ## Integration Tests
 
-Integration tests live under `tests/integration/` and run with either Testcontainers Postgres or an override URL. They reload the FastAPI app so settings and Alembic migrations match production. Use this suite when you need to validate SQL migrations, async drivers, or interactions that depend on a real database engine.
+Integration tests live under `tests/integration/` and validate behavior with real PostgreSQL instances.
+
+**How they work:**
+1. **CI (GitHub Actions)**: Use service container at `localhost:5432` (automatically configured)
+2. **Local (testcontainers)**: Automatically spin up Postgres in Docker (default)
+3. **Local (manual)**: Set `TEST_DATABASE_URL` to point to existing Postgres instance
+
+Integration tests reload the FastAPI app so settings and Alembic migrations match production. Use this suite when you need to validate SQL migrations, async drivers, or interactions that depend on a real database engine.
+
+**Running integration tests:**
+```bash
+# Run all tests including integration (what CI does)
+make testcov
+
+# Run ONLY integration tests
+make test-integration
+```
+
+Integration tests:
+- Run Alembic migrations against real Postgres
+- Test async SQLAlchemy drivers (asyncpg)
+- Validate database constraints and transactions
+- Ensure schema matches ORM models
 
 If Docker is unavailable locally, set `TEST_DATABASE_URL` to point at a Postgres instance; the fixtures will skip gracefully otherwise.
 
+## CI Test Environment
+
+GitHub Actions CI runs the complete test suite including all integration tests.
+
+**Services available in CI:**
+- PostgreSQL 16 (via service container at `localhost:5432`)
+- Redis 7 (via service container at `localhost:6379`)
+- ffmpeg/ffprobe (installed via apt)
+
+**Environment configuration:**
+- `DATABASE_URL`: Points to CI PostgreSQL instance
+- `TEST_DATABASE_URL`: Same as DATABASE_URL for integration tests
+- `DRAMATIQ_BROKER=stub`: Tests use stub broker, not real Redis
+- 15-minute timeout for the entire test job
+
+**Why run integration tests in CI?**
+- Ensures database migrations work correctly
+- Validates real PostgreSQL compatibility (SQLite differs in subtle ways)
+- Catches driver-specific issues (asyncpg, psycopg)
+- Maintains high quality bar for production deployments
+- Prevents regressions in schema/model alignment
+
+**Local vs CI:**
+- **Local**: Integration tests use testcontainers (spins up disposable Postgres in Docker)
+- **CI**: Integration tests use GitHub Actions service container (pre-started, shared across test run)
+- Both approaches ensure isolation and reproducibility
+
 ## Writing New Tests
 
-1. Prefer the fastest layer that still exercises the behaviour you’re touching.
+1. Prefer the fastest layer that still exercises the behaviour you're touching.
 2. Use dependency overrides (`app.dependency_overrides[...]`) or fixtures to inject fake collaborators.
 3. When a route requires authentication, hit `/api/v1/auth/login` (or use the provided fixtures) to obtain a bearer token instead of bypassing middleware.
 4. When tests mutate environment variables, set them with `monkeypatch` to avoid cross-test leakage.

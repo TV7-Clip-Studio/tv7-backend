@@ -384,16 +384,6 @@ make test
 - No external dependencies
 - Covered by default in `make test`
 
-**Integration Tests** (marked with `@pytest.mark.integration`)
-```bash
-make test-integration
-# or: pytest -m integration tests/integration
-```
-- Requires Docker (spins up disposable Postgres via Testcontainers)
-- Tests with real database
-- Override with `TEST_DATABASE_URL` if Docker unavailable
-- Override image with `TEST_POSTGRES_IMAGE`
-
 **System Tests** (marked with `@pytest.mark.system`)
 ```bash
 pytest -m system tests/system -v
@@ -401,6 +391,25 @@ pytest -m system tests/system -v
 - End-to-end FastAPI flows
 - Uses test database fixtures
 - Covered by default in `make test`
+
+**Integration Tests** (marked with `@pytest.mark.integration`)
+```bash
+make test-integration  # Run ONLY integration tests
+# or: pytest -m integration tests/integration
+```
+- Requires PostgreSQL (testcontainers or TEST_DATABASE_URL)
+- Real database migrations with Alembic
+- **Always run in CI via `make testcov`**
+- Locally: Uses testcontainers (Docker) or manual TEST_DATABASE_URL
+- CI: Uses GitHub Actions PostgreSQL service container
+
+**All Tests (what CI runs)**
+```bash
+make testcov  # Includes unit + system + integration
+```
+- 85% coverage minimum
+- Uses testcontainers locally, service containers in CI
+- Override with `TEST_DATABASE_URL` if Docker unavailable
 
 **Regression Tests** (marked with `@pytest.mark.regression`)
 ```bash
@@ -452,6 +461,21 @@ pytest tests/ -k "youtube" -v
 # With coverage for specific module
 pytest tests/test_tasks.py --cov=app.services.tasks --cov-report=term-missing
 ```
+
+### CI Test Environment
+
+GitHub Actions runs the complete test suite with:
+- **PostgreSQL 16** service container
+- **Redis 7** service container
+- **ffmpeg** system package
+- Full coverage reporting (85% minimum)
+
+All pull requests must pass:
+- ✅ Code formatting (Black, Ruff)
+- ✅ Linting (Ruff)
+- ✅ Type checking (MyPy)
+- ✅ Security scan (Bandit)
+- ✅ All tests including integration tests
 
 ### Debugging Tests in VS Code
 
