@@ -11,10 +11,11 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, 
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
+from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from app.core.config import settings
 from app.core.jwt import JWTDecodeError, TokenType
-from app.db.models import ClipGenerationMode, User
+from app.db.models import ClipGenerationMode, User, VideoIngestType, VideoStatus
 from app.deps.db import (
     get_user_repository,
     get_video_repository,
@@ -33,7 +34,13 @@ from app.services.auth import (
     issue_tokens_for_user,
     resolve_user_from_token,
 )
+from app.services.ingest import enqueue_video
 from app.services.storage import delete_video_media
+from app.services.upload_storage import (
+    UploadError,
+    UploadTooLargeError,
+    persist_upload_temporarily,
+)
 from app.services.users import (
     CannotDeleteCurrentUserError,
     UserNotFoundError,
@@ -44,7 +51,14 @@ from app.services.users import (
 from app.services.users import (
     get_user_detail as get_user_detail_service,
 )
-from app.services.videos import InvalidYouTubeURL, get_video_detail, ingest_video, list_videos
+from app.services.videos import (
+    InvalidYouTubeURL,
+    UploadIngestError,
+    get_video_detail,
+    ingest_uploaded_video,
+    ingest_video,
+    list_videos,
+)
 from app.services.youtube_oauth import (
     build_authorization_url,
     build_state_token,
@@ -103,6 +117,34 @@ def _redirect_with_message(
         key = "error" if error else "flash"
         path = f"{path}?{key}={quote_plus(message)}"
     return RedirectResponse(url=path, status_code=status.HTTP_303_SEE_OTHER)
+
+
+async def _build_dashboard_context(
+    request: Request,
+    user: User,
+    video_repo: VideoRepository,
+    credential_repo: YouTubeCredentialRepository,
+    extras: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    videos = await list_videos(video_repo)
+    youtube_connected = False
+    youtube_scope_missing = False
+    if _youtube_oauth_configured():
+        connected, scope_ok = await _youtube_connection_state(user.id, credential_repo)
+        youtube_connected = connected and scope_ok
+        youtube_scope_missing = connected and not scope_ok
+
+    context = {
+        "request": request,
+        "user": user,
+        "videos": videos,
+        "youtube_connected": youtube_connected,
+        "youtube_scope_missing": youtube_scope_missing,
+        "youtube_oauth_configured": _youtube_oauth_configured(),
+    }
+    if extras:
+        context.update(extras)
+    return context
 
 
 async def _current_admin_user(
@@ -295,25 +337,25 @@ async def videos_dashboard(
     if not user:
         return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
 
-    videos = await list_videos(video_repo)
     flash = request.query_params.get("flash")
     error = request.query_params.get("error")
-    youtube_connected = False
-    youtube_scope_missing = False
-    if _youtube_oauth_configured():
-        connected, scope_ok = await _youtube_connection_state(user.id, credential_repo)
-        youtube_connected = connected and scope_ok
-        youtube_scope_missing = connected and not scope_ok
-    context = {
-        "request": request,
-        "user": user,
-        "videos": videos,
-        "flash": flash,
-        "error": error,
-        "youtube_connected": youtube_connected,
-        "youtube_scope_missing": youtube_scope_missing,
-        "youtube_oauth_configured": _youtube_oauth_configured(),
+    ingest_mode = request.query_params.get("ingest_mode")
+    extras = {
+        key: value
+        for key, value in {
+            "flash": flash,
+            "error": error,
+            "ingest_mode": ingest_mode,
+        }.items()
+        if value
     }
+    context = await _build_dashboard_context(
+        request,
+        user,
+        video_repo,
+        credential_repo,
+        extras=extras or None,
+    )
     return templates.TemplateResponse(request, "admin/videos.html", context)
 
 
@@ -373,36 +415,65 @@ async def video_status_json(
 @router.post("/videos/ingest")
 async def ingest_from_dashboard(
     request: Request,
-    youtube_url: str = Form(...),
     video_repo: VideoRepository = Depends(get_video_repository),
     user_repo: UserRepository = Depends(get_user_repository),
+    credential_repo: YouTubeCredentialRepository = Depends(get_youtube_credential_repository),
 ) -> Response:
     user = await _current_admin_user(request, user_repo)
     if not user:
         return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
 
-    try:
-        await ingest_video(youtube_url, video_repo, requested_by_user_id=user.id)
-    except InvalidYouTubeURL as exc:
-        videos = await list_videos(video_repo)
-        context = {
-            "request": request,
-            "user": user,
-            "videos": videos,
-            "error": str(exc),
-            "entered_url": youtube_url,
-        }
+    form = await request.form()
+    ingest_mode = str(form.get("ingest_mode") or "youtube").lower()
+
+    async def _ingest_error(message: str, *, mode: str, entered_url: str | None = None) -> Response:
+        extras = {"error": message, "ingest_mode": mode}
+        if entered_url:
+            extras["entered_url"] = entered_url
+        context = await _build_dashboard_context(
+            request,
+            user,
+            video_repo,
+            credential_repo,
+            extras=extras,
+        )
         return templates.TemplateResponse(
             request,
             "admin/videos.html",
             context,
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
 
-    return RedirectResponse(
-        url="/admin/videos?flash=Video queued for processing",
-        status_code=status.HTTP_303_SEE_OTHER,
-    )
+    response: Response
+    if ingest_mode == "upload":
+        upload_file = form.get("upload_file")
+        if not isinstance(upload_file, StarletteUploadFile) or not upload_file.filename:
+            return await _ingest_error("Select a video file to upload.", mode="upload")
+        try:
+            stored = await persist_upload_temporarily(upload_file)
+            await ingest_uploaded_video(
+                stored,
+                video_repo,
+                requested_by_user_id=user.id,
+            )
+        except UploadTooLargeError as exc:
+            response = await _ingest_error(str(exc), mode="upload")
+        except (UploadError, UploadIngestError) as exc:
+            response = await _ingest_error(str(exc), mode="upload")
+        else:
+            response = _redirect_with_message("/admin/videos", "Upload queued for processing")
+    else:
+        youtube_url = str(form.get("youtube_url") or "").strip()
+        if not youtube_url:
+            return await _ingest_error("Enter a YouTube URL.", mode="youtube")
+        try:
+            await ingest_video(youtube_url, video_repo, requested_by_user_id=user.id)
+        except InvalidYouTubeURL as exc:
+            response = await _ingest_error(str(exc), mode="youtube", entered_url=youtube_url)
+        else:
+            response = _redirect_with_message("/admin/videos", "Video queued for processing")
+
+    return response
 
 
 @router.post("/videos/{video_id}/delete")
@@ -458,12 +529,21 @@ async def request_more_highlights(
     if not video:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found")
 
-    await ingest_video(
-        video.source_url,
-        video_repo,
-        requested_by_user_id=user.id,
-        clip_mode=ClipGenerationMode.APPEND,
-    )
+    ingest_type = VideoIngestType(video.ingest_type)
+    if ingest_type == VideoIngestType.YOUTUBE:
+        await ingest_video(
+            video.source_url,
+            video_repo,
+            requested_by_user_id=user.id,
+            clip_mode=ClipGenerationMode.APPEND,
+        )
+    else:
+        video.clip_generation_mode = ClipGenerationMode.APPEND.value
+        video.status = VideoStatus.INGESTED.value
+        video.error_message = None
+        await video_repo.commit()
+        await enqueue_video(video.id, source_url=video.source_url, user_id=user.id)
+
     return _redirect_with_message(
         f"/admin/videos/{video_id}", "Requested additional highlights. Queueing now."
     )

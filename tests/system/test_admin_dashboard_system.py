@@ -1,14 +1,24 @@
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
+from fastapi import UploadFile
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.admin.routes import SESSION_COOKIE_NAME
-from app.db.models import Clip, ClipGenerationMode, ClipStatus, Video, VideoStatus
+from app.db.models import (
+    Clip,
+    ClipGenerationMode,
+    ClipStatus,
+    Video,
+    VideoIngestType,
+    VideoStatus,
+)
 from app.services import videos as video_service
+from app.services.upload_storage import StoredUpload
 
 
 @pytest.mark.anyio
@@ -113,6 +123,68 @@ async def test_ingest_form_queues_video(
     assert follow_up.status_code == 200
     assert "Video queued for processing" in follow_up.text
     enqueue_mock.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_upload_form_requires_file(
+    app_client: AsyncClient,
+    system_login_credentials: tuple[str, str],
+) -> None:
+    email, password = system_login_credentials
+    login_response = await app_client.post(
+        "/admin/login",
+        data={"email": email, "password": password},
+        follow_redirects=False,
+    )
+    app_client.cookies.update(login_response.cookies)
+
+    response = await app_client.post(
+        "/admin/videos/ingest",
+        data={"ingest_mode": "upload"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 422
+    assert "Select a video file to upload." in response.text
+
+
+@pytest.mark.anyio
+async def test_upload_form_queues_file(
+    app_client: AsyncClient,
+    system_login_credentials: tuple[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    email, password = system_login_credentials
+    login_response = await app_client.post(
+        "/admin/login",
+        data={"email": email, "password": password},
+        follow_redirects=False,
+    )
+    app_client.cookies.update(login_response.cookies)
+
+    stored = StoredUpload(
+        temp_path=tmp_path / "upload.bin",
+        original_filename="demo.mp4",
+        file_size_bytes=5,
+        checksum="abc",
+    )
+
+    async def fake_persist(_: UploadFile) -> StoredUpload:
+        return stored
+
+    ingest_mock = AsyncMock()
+    monkeypatch.setattr("app.admin.routes.persist_upload_temporarily", fake_persist, raising=False)
+    monkeypatch.setattr("app.admin.routes.ingest_uploaded_video", ingest_mock, raising=False)
+
+    response = await app_client.post(
+        "/admin/videos/ingest",
+        data={"ingest_mode": "upload"},
+        files={"upload_file": ("demo.mp4", b"file-bytes", "video/mp4")},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/admin/videos?flash=")
+    ingest_mock.assert_awaited_once()
 
 
 @pytest.mark.anyio
@@ -224,6 +296,7 @@ async def test_video_detail_renders_video_with_clips(
     assert f"Clip #{clip2.id}" in response.text
     assert "10s → 25s" in response.text
     assert "45s → 60s" in response.text
+    assert clip1.local_path is not None
     assert clip1.local_path in response.text
     assert "View transcript" in response.text
     assert "Clips ready" in response.text
@@ -267,6 +340,48 @@ async def test_request_more_highlights_queues_append_mode(
 
     await db_session.refresh(video)
     assert video.clip_generation_mode == ClipGenerationMode.APPEND.value
+
+
+@pytest.mark.anyio
+async def test_request_more_highlights_handles_uploads(
+    app_client: AsyncClient,
+    system_login_credentials: tuple[str, str],
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video = Video(
+        source_url="upload://example",
+        ingest_type=VideoIngestType.UPLOAD.value,
+        status=VideoStatus.READY.value,
+        local_path="/tmp/video.mp4",
+        clip_generation_mode=ClipGenerationMode.REPLACE.value,
+    )
+    db_session.add(video)
+    await db_session.commit()
+    await db_session.refresh(video)
+
+    enqueue_mock = AsyncMock()
+    monkeypatch.setattr("app.admin.routes.enqueue_video", enqueue_mock, raising=False)
+
+    email, password = system_login_credentials
+    login_response = await app_client.post(
+        "/admin/login",
+        data={"email": email, "password": password},
+        follow_redirects=False,
+    )
+    app_client.cookies.update(login_response.cookies)
+
+    response = await app_client.post(
+        f"/admin/videos/{video.id}/more-highlights",
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert "Queueing" in response.headers["location"]
+    enqueue_mock.assert_awaited_once()
+
+    await db_session.refresh(video)
+    assert video.clip_generation_mode == ClipGenerationMode.APPEND.value
+    assert video.status == VideoStatus.INGESTED.value
 
 
 @pytest.mark.anyio

@@ -16,6 +16,7 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import TranscriptsDisabled, VideoUnavailable
 
 from app.core.config import settings
+from app.services.video_storage import source_paths
 
 logger = logging.getLogger(__name__)
 
@@ -154,14 +155,6 @@ def _fetch_transcript(
             extra={"video_id": video_id, "error": str(exc)},
         )
         return None, None
-
-
-def _prepare_storage_paths(video_id: int) -> tuple[Path, Path, Path]:
-    storage_dir = Path(settings.MEDIA_STORAGE_DIR) / "videos" / str(video_id)
-    storage_dir.mkdir(parents=True, exist_ok=True)
-    output_template = storage_dir / "source.%(ext)s"
-    final_output_path = storage_dir / "source.mp4"
-    return storage_dir, output_template, final_output_path
 
 
 def _apply_cookie_auth(ydl_opts: dict[str, object]) -> None:
@@ -592,7 +585,7 @@ def download_video_and_transcript(
         video_id: Database video ID for organizing storage
         source_url: YouTube video URL
     """
-    storage_dir, output_template, final_output_path = _prepare_storage_paths(video_id)
+    storage_dir, output_template, final_output_path = source_paths(video_id)
     max_file_size = settings.MAX_VIDEO_FILE_SIZE_MB * 1024 * 1024
     context = _DownloadContext(
         video_id=video_id,

@@ -71,9 +71,20 @@
     </div>
 
     <div style="margin-top: 1rem;">
-      <p style="margin: 0.25rem 0; color: #94a3b8; font-size: 0.9rem;">
-        <strong>Source:</strong> <a href="{{ video.source_url }}" target="_blank" rel="noreferrer noopener">{{ video.source_url }}</a>
-      </p>
+      {% if video.ingest_type == 'upload' %}
+        <p style="margin: 0.25rem 0; color: #94a3b8; font-size: 0.9rem;">
+          <strong>Source:</strong> Uploaded file{% if video.original_filename %} — {{ video.original_filename }}{% endif %}
+        </p>
+        {% if video.upload_file_size_bytes %}
+          <p style="margin: 0.25rem 0; color: #94a3b8; font-size: 0.9rem;">
+            <strong>Original size:</strong> {{ "%.2f"|format(video.upload_file_size_bytes / 1024 / 1024) }} MB
+          </p>
+        {% endif %}
+      {% else %}
+        <p style="margin: 0.25rem 0; color: #94a3b8; font-size: 0.9rem;">
+          <strong>Source:</strong> <a href="{{ video.source_url }}" target="_blank" rel="noreferrer noopener">{{ video.source_url }}</a>
+        </p>
+      {% endif %}
       <p style="margin: 0.25rem 0; color: #94a3b8; font-size: 0.9rem;">
         <strong>Created:</strong> {{ video.created_at.strftime('%Y-%m-%d %H:%M') if video.created_at else '—' }}
       </p>

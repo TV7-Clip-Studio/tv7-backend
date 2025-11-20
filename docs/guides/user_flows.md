@@ -178,29 +178,37 @@ Access token expires
 
 ### Flow 3: Video Ingestion (API)
 ```
-1. POST /api/v1/videos/ingest
-   Headers: Authorization: Bearer {token}
-   Body: { "youtube_url": "https://youtube.com/watch?v=..." }
-  ↓
-2a. Success → 201 Created
-    Response: {
-      "video_id": 123,
-      "status": "queued",
-      "created": true
-    }
-  ↓
-2b. Duplicate URL → 200 OK
-    Response: {
-      "video_id": 123,
-      "status": "queued",
-      "created": false  // Already exists, re-queued
-    }
-  ↓
-2c. Invalid URL → 422 Unprocessable Entity
-    Response: { "detail": "Invalid YouTube URL" }
-  ↓
-3. Poll status endpoint to track progress
+3a. POST /api/v1/videos/ingest/youtube
+    Headers: Authorization: Bearer {token}
+    Body: { "youtube_url": "https://youtube.com/watch?v=...", "append_clips": false }
+   ↓
+   Response: 202 Accepted
+     {
+       "video": {...},
+       "queued": true,
+       "created": true|false  // false when URL already exists, triggers re-queue
+     }
+   ↓
+   Invalid URL → 422 Unprocessable Entity with detail message
+
+3b. POST /api/v1/videos/ingest/upload
+    Headers: Authorization: Bearer {token}
+    Body: multipart/form-data with:
+      - file: binary video
+      - append_clips (optional form field)
+   ↓
+   Response: 202 Accepted
+     {
+       "video": {..., "ingest_type": "upload"},
+       "queued": true,
+       "created": true
+     }
+   ↓
+   Oversized file → 413 Request Entity Too Large
+   Invalid upload (missing file, corrupt temp storage) → 400 Bad Request
 ```
+
+Uploads are streamed to disk, resampled using the configured ffmpeg profile, and then share the exact same Dramatiq pipeline as downloaded sources. After ingestion, continue to poll status as described below.
 
 ---
 
@@ -490,7 +498,7 @@ Notify operator (email, webhook, dashboard)
 
 **API client actions:**
 - Authenticate → POST /api/v1/auth/login
-- Ingest video → POST /api/v1/videos/ingest
+- Ingest video → POST /api/v1/videos/ingest/youtube or /api/v1/videos/ingest/upload
 - Poll status → GET /api/v1/videos/{id}
 - Get clips → GET /api/v1/videos/{id}/clips
 

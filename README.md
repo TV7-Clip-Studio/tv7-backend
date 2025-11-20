@@ -21,7 +21,18 @@ To stop everything, press `Ctrl+C` or run `make down`.
 ### Requirements
 
 - **Docker workflow:** Docker + Compose install (Node.js is pre-installed in the image; no extra setup).
-- **Local workflow (without Docker):** Python 3.12, Node.js 18+ (required by yt-dlp to execute YouTube’s player JavaScript and enumerate formats), Postgres 16, and Redis 7.
+- **Local workflow (without Docker):** Python 3.12.12, Node.js 18+ (required by yt-dlp to execute YouTube’s player JavaScript and enumerate formats), Postgres 16, and Redis 7.
+
+> **Already have a virtualenv?**  
+> If you bootstrapped `tv7-2` earlier (for example under `/code/tv7-2`), remove the old `.venv` and recreate it with Python 3.12.12 so local/dev/Fly all match what CI now runs:
+> ```bash
+> brew update && brew upgrade pyenv
+> pyenv install 3.12.12
+> PYENV_VERSION=3.12.12 python -m venv .venv
+> source .venv/bin/activate
+> pip install --upgrade pip setuptools
+> pip install -e ".[dev]"
+> ```
 - *Why we pin yt-dlp to 2025.10.22:* the 2025.11+ releases require the external “EJS” bundle (GitHub-hosted challenge solver scripts) which is currently unavailable in Fly deployments, so we temporarily stay on the last pre-EJS version to keep downloads working. Remove the pin once we can bundle the new solver assets.
 
 ### Running multiple local instances
@@ -185,6 +196,12 @@ docker compose down -v             # Stop and remove volumes (fresh DB)
 docker system prune                # Clean up unused Docker resources
 ```
 
+### Video Ingestion Options
+
+- **YouTube links:** `POST /api/v1/videos/ingest/youtube` accepts JSON `{ "youtube_url": "...", "append_clips": false }` and re-queues existing videos instead of duplicating rows.
+- **Direct uploads:** `POST /api/v1/videos/ingest/upload` accepts `multipart/form-data` with a `file` field (and optional `append_clips` form flag). Uploaded videos are written to disk, resampled to the configured profile (`UPLOAD_NORMALIZED_*` settings), and then treated the same as downloaded sources.
+- The admin dashboard mirrors these choices via a toggle that switches between the URL form and the upload picker. Large uploads are automatically resampled before the pipeline runs so operators can safely drop big mezzanine files without exhausting storage.
+
 ## Environment
 
 - `BETA_API_KEY` enables the beta API guard (required for `/api/v1/ai` locally and in Fly secrets).
@@ -204,6 +221,11 @@ docker system prune                # Clean up unused Docker resources
 - `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REDIRECT_PATH` configure Google OAuth. The full redirect URI is derived from `API_SCHEME`/`API_HOST`/`API_PORT`.
   - `YOUTUBE_OAUTH_SCOPES` controls requested scopes (defaults to `youtube.readonly`).
   - Optional `YOUTUBE_COOKIES_FILE` / `YOUTUBE_COOKIES_BROWSER` values fall back to cookie-based auth when OAuth is not configured.
+- Local transcription runs via [faster-whisper](https://github.com/SYSTRAN/faster-whisper). Configure with:
+  - `WHISPER_MODEL_NAME` (e.g., `small`, `medium`, `large-v3`)
+  - `WHISPER_DEVICE` (`cpu` or `cuda`)
+  - `WHISPER_COMPUTE_TYPE` (e.g., `int8`, `float16`)
+  - Optional `WHISPER_LANGUAGE` to force a specific language.
 - Host-port overrides for Docker Compose instances:
   - `POSTGRES_PORT` (defaults to `5432`).
   - `REDIS_PORT` (defaults to `6379`).
@@ -373,16 +395,6 @@ make test
 - No external dependencies
 - Covered by default in `make test`
 
-**Integration Tests** (marked with `@pytest.mark.integration`)
-```bash
-make test-integration
-# or: pytest -m integration tests/integration
-```
-- Requires Docker (spins up disposable Postgres via Testcontainers)
-- Tests with real database
-- Override with `TEST_DATABASE_URL` if Docker unavailable
-- Override image with `TEST_POSTGRES_IMAGE`
-
 **System Tests** (marked with `@pytest.mark.system`)
 ```bash
 pytest -m system tests/system -v
@@ -390,6 +402,25 @@ pytest -m system tests/system -v
 - End-to-end FastAPI flows
 - Uses test database fixtures
 - Covered by default in `make test`
+
+**Integration Tests** (marked with `@pytest.mark.integration`)
+```bash
+make test-integration  # Run ONLY integration tests
+# or: pytest -m integration tests/integration
+```
+- Requires PostgreSQL (testcontainers or TEST_DATABASE_URL)
+- Real database migrations with Alembic
+- **Always run in CI via `make testcov`**
+- Locally: Uses testcontainers (Docker) or manual TEST_DATABASE_URL
+- CI: Uses GitHub Actions PostgreSQL service container
+
+**All Tests (what CI runs)**
+```bash
+make testcov  # Includes unit + system + integration
+```
+- 85% coverage minimum
+- Uses testcontainers locally, service containers in CI
+- Override with `TEST_DATABASE_URL` if Docker unavailable
 
 **Regression Tests** (marked with `@pytest.mark.regression`)
 ```bash
@@ -441,6 +472,21 @@ pytest tests/ -k "youtube" -v
 # With coverage for specific module
 pytest tests/test_tasks.py --cov=app.services.tasks --cov-report=term-missing
 ```
+
+### CI Test Environment
+
+GitHub Actions runs the complete test suite with:
+- **PostgreSQL 16** service container
+- **Redis 7** service container
+- **ffmpeg** system package
+- Full coverage reporting (85% minimum)
+
+All pull requests must pass:
+- ✅ Code formatting (Black, Ruff)
+- ✅ Linting (Ruff)
+- ✅ Type checking (MyPy)
+- ✅ Security scan (Bandit)
+- ✅ All tests including integration tests
 
 ### Debugging Tests in VS Code
 

@@ -2,7 +2,6 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-
 import scripts.cleanup_media as cleanup
 
 pytestmark = pytest.mark.no_db_override

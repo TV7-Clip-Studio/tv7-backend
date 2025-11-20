@@ -23,6 +23,7 @@ from sqlalchemy.engine.url import make_url
 from testcontainers.postgres import PostgresContainer
 
 from app.core.security import hash_password
+from app.db import models  # noqa: F401  # ensure all models are registered
 from app.db.base import get_sessionmaker
 from app.db.models import User
 

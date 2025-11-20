@@ -19,7 +19,7 @@
 
 ## Phase 1 — Shorts MVP (🚧 Active)
 - 1.1 ✅ Define `Video` and `Clip` ORM models with enums/status columns, transcript/file path fields, and generate Alembic migrations to create the backing tables.
-- 1.2 ✅ Implement `POST /videos/ingest` inside `api/v1` that validates the YouTube URL, creates a `Video` record (`status=ingested`), and enqueues the processing workflow.
+- 1.2 ✅ Implement `POST /videos/ingest/youtube` inside `api/v1` (with `/ingest` alias) that validates the YouTube URL, creates a `Video` record (`status=ingested`), and enqueues the processing workflow.
 - 1.3 ✅ Build background execution infrastructure (Celery/RQ/Dramatiq or equivalent) plus a task orchestrator that runs the ingestion → highlight → clipping stages off-thread.
 - 1.4.0 ✅ Refactor v1 API routers into service/repository layers, introduce shared DB dependencies, add end-to-end system tests, and lay the groundwork for JWT-based authentication.
 - 1.4.1 ✅ Add JWT configuration, token utilities, and auth service for issuing access/refresh tokens.
@@ -27,7 +27,7 @@
 - 1.4.3 ✅ Update tests/docs to reflect the JWT flow (system/integration suites request tokens) and finalize beta-key deprecation plan.
 - 1.5.1 ✅ Build authenticated operator dashboard: HTML login backed by JWT cookies, `/admin` templates for video and clip views, ingestion form, and publish controls (stub).
 - 1.5.2 ✅ Deliver internal admin routes `/admin/videos` and `/admin/videos/{video_id}` with Jinja templates: list view, per-video clip gallery, preview players, and buttons wired to the publish endpoint stub.
-- 1.5.3 ✅ Add admin-side ingestion workflow: `/admin/videos/new` (or inline modal) that lets operators paste a YouTube URL, submits to `POST /videos/ingest`, and shows immediate feedback/status polling.
+- 1.5.3 ✅ Add admin-side ingestion workflow: `/admin/videos/new` (or inline modal) that lets operators paste a YouTube URL (now also toggle to upload), submits to the ingest endpoint, and shows immediate feedback/status polling.
 - 1.6.a ✅ Add yt-dlp and youtube-transcript-api dependencies; configure storage directory, quality, and file size limits.
 - 1.6.b ✅ Create `services/youtube_downloader.py` with video download logic, transcript fetching (manual/auto fallback), error handling for size limits and failures.
 - 1.6.c ✅ Extend Video model with duration_seconds, file_size_bytes, error_message fields and generate Alembic migration.
@@ -42,6 +42,7 @@
   - 1.8.c ✅ Wire clip rendering jobs into Dramatiq so each Clip transitions from `rendering` to `ready` — introduced per-clip actors with render batches, parallel fan-out, and automatic finalization once all renders succeed.
 - 1.9 Create `services/subtitle_styler.py` to extract transcript snippets, render social-style captions (font, outline, positioning), burn them into the clip, and update `Clip.local_path` + `status=ready`.
 - 1.10 Expose `GET /status/{video_id}` (overall state + per-clip summaries) and `GET /videos/{video_id}/clips` (detailed clip metadata, previews, captions) for polling and UI consumption.
+- 1.11 Add alternate ingest flow allowing operators to upload local video files: extend `/videos/ingest` + admin UI to accept uploads OR YouTube URLs, persist binaries to media storage, capture metadata, and adapt the processing pipeline to treat uploaded files as first-class sources alongside downloads.
 
 ## Phase 2 — Operational Polish (Queued)
 - 2.1 Add `PublishJob` ORM model/migration covering platform enum, status, response payload, timestamps.

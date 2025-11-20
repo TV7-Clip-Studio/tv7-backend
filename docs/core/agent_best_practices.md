@@ -54,7 +54,7 @@ I will follow the established patterns in the codebase and ask for clarification
 1. **Plan before coding:** For medium/large tasks, outline the approach (data model changes, workers, APIs) before touching code. Keep plans alongside PRs/issues.
 2. **Sync configuration:** When you add settings, migrations, or background workers, update `.env.example`, Alembic revisions, and docs. No hard-coded secrets or paths.
 3. **Guard the request path:** Long-running or CPU-heavy work belongs in background tasks. If you must block, document why and add TODOs for follow-up.
-4. **Test locally:** Run `make fmt`, `make lint`, `make type`, `make testcov`, and relevant targeted tests before opening a PR. Use `make worker` (once added) to exercise pipelines end-to-end.
+4. **Test locally:** Run `make fmt`, `make lint`, `make type`, `make testcov` before opening a PR. The testcov target runs all tests including integration tests with testcontainers. If Docker is unavailable, set `TEST_DATABASE_URL` to a local Postgres instance. Use `make worker` (once added) to exercise pipelines end-to-end.
 5. **Update documentation:** Keep relevant docs current when behavior changes:
    - `docs/architecture.md` - System design changes
    - `docs/roadmap.md` + `docs/roadmap_rationale.md` - Feature completion and reasoning
@@ -86,6 +86,9 @@ I will follow the established patterns in the codebase and ask for clarification
 1. Make code changes (write/edit files)
 2. Run quality checks (`make fmt`, `make lint`, `make type`)
 3. Run tests (`make testcov`)
+   - Includes unit, system, AND integration tests
+   - Integration tests use testcontainers (requires Docker)
+   - Ensure Docker Desktop is running if tests need it
 4. Stage changes (`git add <files>`)
 5. Provide PR description to human
 6. Human reviews, commits, and pushes
@@ -138,6 +141,34 @@ I will follow the established patterns in the codebase and ask for clarification
 - Update version matrix in `tech_stack.md` if dependencies change
 - Document rollback procedures if critical
 
+## CI Environment
+
+GitHub Actions CI runs the complete test suite with high-quality enforcement:
+
+**Services provided:**
+- PostgreSQL 16 (service container at `localhost:5432`)
+- Redis 7 (service container at `localhost:6379`)
+- ffmpeg/ffprobe (installed via apt)
+
+**Test coverage:**
+- All test types: Unit, system, and integration tests
+- 85% minimum coverage threshold enforced
+- 15-minute timeout to prevent hanging
+
+**Quality gates (all must pass):**
+- ✅ Code formatting (Black, Ruff)
+- ✅ Linting (Ruff)
+- ✅ Type checking (MyPy)
+- ✅ Security scan (Bandit)
+- ✅ Full test suite including integration tests
+
+**If CI fails:**
+1. Check test output for specific failures
+2. Reproduce locally with `make testcov`
+3. For integration test issues, verify Docker is running or set `TEST_DATABASE_URL`
+4. Ensure migrations are up to date (`make upgrade`)
+5. Re-run quality checks: `make fmt && make lint && make type && make sec`
+
 ## Quick Checklist
 
 **For agents (before handing off to human):**
@@ -145,7 +176,8 @@ I will follow the established patterns in the codebase and ask for clarification
 - [ ] Code follows FastAPI + service module patterns.
 - [ ] Auth/rate limits/admin guardrails applied.
 - [ ] Background work is non-blocking and idempotent.
-- [ ] Metrics/logs/tests updated; `make testcov` passes.
+- [ ] Metrics/logs/tests updated; `make testcov` passes (includes integration tests).
+- [ ] Docker is running if integration tests are needed.
 - [ ] Docs and runbooks refreshed (check INDEX.md for what needs updating).
 - [ ] New dependencies added to `tech_stack.md`.
 - [ ] User-facing changes reflected in `user_flows.md`.

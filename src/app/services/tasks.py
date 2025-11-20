@@ -6,24 +6,41 @@ import threading
 import uuid
 from collections.abc import Coroutine
 from concurrent.futures import Future
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, TypeVar, cast
 
+import anyio
 from dramatiq import actor
 from dramatiq.middleware import CurrentMessage
 from sqlalchemy import delete, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.db.base import session_scope
-from app.db.models import Clip, ClipGenerationMode, ClipStatus, Video, VideoStatus
+from app.db.models import (
+    Clip,
+    ClipGenerationMode,
+    ClipStatus,
+    Video,
+    VideoIngestType,
+    VideoStatus,
+)
 from app.repositories.youtube_credentials import YouTubeCredentialRepository
 from app.services.clipper import ClipRenderError, render_clip
 from app.services.highlight_detector import HighlightDetectionError
 from app.services.highlight_detector import detect_highlights as detect_highlights_service
 from app.services.queue import get_broker
 from app.services.render_workspace import get_video_workspace
+from app.services.transcription import TranscriptionError, transcribe_video_file
+from app.services.video_normalizer import (
+    VideoNormalizationError,
+    VideoNormalizationResult,
+    normalize_uploaded_video,
+)
 from app.services.youtube_downloader import (
     DownloadError,
+    DownloadResult,
     VideoTooLargeError,
     download_video_and_transcript,
 )
@@ -99,6 +116,125 @@ async def _video_has_error(video_id: int) -> bool:
     return status == VideoStatus.ERROR
 
 
+def _should_reuse_assets(
+    video: Video,
+    *,
+    append_mode: bool,
+    require_transcript: bool,
+) -> bool:
+    if not append_mode:
+        return False
+    if not video.local_path or not video.duration_seconds:
+        return False
+    if require_transcript:
+        return bool(video.transcript_text)
+    return True
+
+
+async def _resolve_access_token(video: Video, session: AsyncSession) -> str | None:
+    if not video.requested_by_user_id:
+        return None
+    credential_repo = YouTubeCredentialRepository(session)
+    try:
+        return await get_valid_access_token(video.requested_by_user_id, credential_repo)
+    except Exception as exc:  # pragma: no cover - network errors
+        logger.warning(
+            "Failed to refresh YouTube access token",
+            extra={"video_id": video.id, "error": str(exc)},
+        )
+    return None
+
+
+def _apply_youtube_download(video: Video, result: DownloadResult) -> None:
+    video.local_path = result.local_path
+    video.file_size_bytes = result.file_size_bytes
+    video.transcript_text = result.transcript_text
+    video.transcript_language = result.transcript_language
+    video.duration_seconds = result.duration_seconds
+    video.error_message = None
+
+
+async def _normalize_upload_assets(video: Video) -> VideoNormalizationResult:
+    if not video.upload_original_path:
+        raise VideoNormalizationError("Upload pending file missing from disk")
+    normalization_result = cast(
+        VideoNormalizationResult,
+        await anyio.to_thread.run_sync(
+            normalize_uploaded_video,
+            video.id,
+            Path(video.upload_original_path),
+        ),
+    )
+    video.local_path = normalization_result.normalized_path
+    video.file_size_bytes = normalization_result.file_size_bytes
+    video.duration_seconds = normalization_result.duration_seconds
+    video.upload_original_path = None
+    video.error_message = None
+    return normalization_result
+
+
+async def _ensure_transcript(video: Video) -> None:
+    if video.transcript_text or not video.local_path:
+        return
+    transcript = await transcribe_video_file(video.local_path)
+    video.transcript_text = transcript.text
+    video.transcript_language = transcript.language_code
+
+
+async def _process_video_assets(
+    video: Video,
+    ingest_type: VideoIngestType,
+    append_mode: bool,
+    access_token: str | None,
+    session: AsyncSession,
+) -> None:
+    video_id = video.id
+    if ingest_type == VideoIngestType.YOUTUBE:
+        if _should_reuse_assets(video, append_mode=append_mode, require_transcript=True):
+            logger.info(
+                "Skipping video download; reusing cached assets",
+                extra={"video_id": video_id},
+            )
+            return
+        result = download_video_and_transcript(
+            video_id,
+            video.source_url,
+            access_token=access_token,
+        )
+
+        _apply_youtube_download(video, result)
+        await session.flush()
+        logger.info(
+            "Video downloaded successfully",
+            extra={
+                "video_id": video_id,
+                "duration": result.duration_seconds,
+                "file_size_mb": result.file_size_bytes / 1024 / 1024,
+                "has_transcript": result.transcript_text is not None,
+            },
+        )
+    else:
+        if _should_reuse_assets(video, append_mode=append_mode, require_transcript=False):
+            logger.info(
+                "Skipping upload normalization; reusing cached assets",
+                extra={"video_id": video_id},
+            )
+            return
+        normalization_result = await _normalize_upload_assets(video)
+        await session.flush()
+        logger.info(
+            "Upload normalized successfully",
+            extra={
+                "video_id": video_id,
+                "duration": normalization_result.duration_seconds,
+                "file_size_mb": normalization_result.file_size_bytes / 1024 / 1024,
+            },
+        )
+
+    await _ensure_transcript(video)
+    await session.flush()
+
+
 @actor(broker=_broker, max_retries=3)
 def process_video(video_id: int, message_id: str | None = None) -> None:
     """Entry point for the pipeline: mark video processing and kick off stages."""
@@ -125,57 +261,17 @@ async def _download_video_task(video_id: int) -> None:
         workspace = get_video_workspace(video_id)
         video.workspace_root = str(workspace.root)
 
-        access_token: str | None = None
-        if video.requested_by_user_id:
-            credential_repo = YouTubeCredentialRepository(session)
-            try:
-                access_token = await get_valid_access_token(
-                    video.requested_by_user_id, credential_repo
-                )
-            except Exception as exc:  # pragma: no cover - network errors
-                logger.warning(
-                    "Failed to refresh YouTube access token",
-                    extra={"video_id": video_id, "error": str(exc)},
-                )
+        ingest_type = VideoIngestType(video.ingest_type or VideoIngestType.YOUTUBE.value)
+        access_token = await _resolve_access_token(video, session)
 
         try:
             append_mode = video.clip_generation_mode == ClipGenerationMode.APPEND.value
-            if (
-                append_mode
-                and video.local_path
-                and video.transcript_text
-                and video.duration_seconds
-            ):
-                logger.info(
-                    "Skipping video download; reusing cached assets",
-                    extra={"video_id": video_id},
-                )
-                return
-            # Download video and transcript
-            result = download_video_and_transcript(
-                video_id,
-                video.source_url,
-                access_token=access_token,
-            )
-
-            # Update video with download results
-            video.local_path = result.local_path
-            video.file_size_bytes = result.file_size_bytes
-            video.transcript_text = result.transcript_text
-            video.transcript_language = result.transcript_language
-            video.duration_seconds = result.duration_seconds
-            video.error_message = None  # Clear any previous errors
-
-            await session.flush()
-
-            logger.info(
-                "Video downloaded successfully",
-                extra={
-                    "video_id": video_id,
-                    "duration": result.duration_seconds,
-                    "file_size_mb": result.file_size_bytes / 1024 / 1024,
-                    "has_transcript": result.transcript_text is not None,
-                },
+            await _process_video_assets(
+                video,
+                ingest_type,
+                append_mode,
+                access_token,
+                session,
             )
 
         except VideoTooLargeError as exc:
@@ -194,6 +290,24 @@ async def _download_video_task(video_id: int) -> None:
             )
             video.status = VideoStatus.ERROR.value
             video.error_message = str(exc)
+            await session.flush()
+
+        except VideoNormalizationError as exc:
+            logger.error(
+                "Video normalization failed",
+                extra={"video_id": video_id, "error": str(exc)},
+            )
+            video.status = VideoStatus.ERROR.value
+            video.error_message = str(exc)
+            await session.flush()
+
+        except TranscriptionError as exc:
+            logger.error(
+                "Video transcription failed",
+                extra={"video_id": video_id, "error": str(exc)},
+            )
+            video.status = VideoStatus.ERROR.value
+            video.error_message = f"Transcription failed: {exc}"
             await session.flush()
 
         except Exception as exc:

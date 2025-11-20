@@ -29,6 +29,7 @@ __all__ = [
     "ClipStatus",
     "AuthProvider",
     "ClipGenerationMode",
+    "VideoIngestType",
 ]
 
 
@@ -57,34 +58,9 @@ class ClipGenerationMode(str, Enum):
     APPEND = "append"
 
 
-class User(Base):
-    __tablename__ = "users"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    full_name: Mapped[str] = mapped_column(String(255))
-    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    primary_auth_provider: Mapped[str] = mapped_column(
-        String(32),
-        nullable=False,
-        default=AuthProvider.EMAIL.value,
-        server_default=AuthProvider.EMAIL.value,
-    )
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
-    )
-    oauth_accounts: Mapped[list[UserOAuthAccount]] = relationship(
-        back_populates="user",
-        cascade="all, delete-orphan",
-    )
-    youtube_credential: Mapped[YouTubeCredential | None] = relationship(
-        back_populates="user",
-        uselist=False,
-        cascade="all, delete-orphan",
-    )
+class VideoIngestType(str, Enum):
+    YOUTUBE = "youtube"
+    UPLOAD = "upload"
 
 
 class UserOAuthAccount(Base):
@@ -112,7 +88,41 @@ class UserOAuthAccount(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
-    user: Mapped[User] = relationship(back_populates="oauth_accounts")
+    user: Mapped[User] = relationship(
+        "User",
+        back_populates="oauth_accounts",
+    )
+
+
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    full_name: Mapped[str] = mapped_column(String(255))
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    primary_auth_provider: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default=AuthProvider.EMAIL.value,
+        server_default=AuthProvider.EMAIL.value,
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+    oauth_accounts: Mapped[list[UserOAuthAccount]] = relationship(
+        "UserOAuthAccount",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    youtube_credential: Mapped[YouTubeCredential | None] = relationship(
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
 
 class Video(Base):
@@ -121,6 +131,16 @@ class Video(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     source_url: Mapped[str] = mapped_column(String(512), nullable=False)
     local_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    ingest_type: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default=VideoIngestType.YOUTUBE.value,
+        server_default=VideoIngestType.YOUTUBE.value,
+    )
+    original_filename: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    upload_checksum: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    upload_file_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    upload_original_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     transcript_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     transcript_language: Mapped[str | None] = mapped_column(String(16), nullable=True)
     requested_by_user_id: Mapped[int | None] = mapped_column(

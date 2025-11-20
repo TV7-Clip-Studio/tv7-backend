@@ -1,6 +1,7 @@
 app = "forgotten-app"
 primary_region = "gru"
 
+
 [http_service]
   processes = ["app"]
   internal_port = 8000
