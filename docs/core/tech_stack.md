@@ -4,7 +4,7 @@
 
 ## Runtime Environment
 
-**Python 3.12+**
+**Python 3.12.12**
 - Target version for all development and deployment
 - Uses modern type hints (`|` unions, `from __future__ import annotations`)
 - Required for async features and SQLAlchemy 2.0 compatibility
@@ -284,7 +284,7 @@
 
 | Component | Minimum | Recommended | Notes |
 |-----------|---------|-------------|-------|
-| Python | 3.12 | 3.12.6 | Strict requirement |
+| Python | 3.12.12 | 3.12.12 | Strict requirement |
 | FastAPI | 0.115 | Latest 0.x | Stable API |
 | SQLAlchemy | 2.0 | 2.0+ | Async support required |
 | PostgreSQL | 14 | 16 | Neon uses 16 |

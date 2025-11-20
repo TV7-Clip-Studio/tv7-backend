@@ -21,7 +21,18 @@ To stop everything, press `Ctrl+C` or run `make down`.
 ### Requirements
 
 - **Docker workflow:** Docker + Compose install (Node.js is pre-installed in the image; no extra setup).
-- **Local workflow (without Docker):** Python 3.12, Node.js 18+ (required by yt-dlp to execute YouTube’s player JavaScript and enumerate formats), Postgres 16, and Redis 7.
+- **Local workflow (without Docker):** Python 3.12.12, Node.js 18+ (required by yt-dlp to execute YouTube’s player JavaScript and enumerate formats), Postgres 16, and Redis 7.
+
+> **Already have a virtualenv?**  
+> If you bootstrapped `tv7-2` earlier (for example under `/code/tv7-2`), remove the old `.venv` and recreate it with Python 3.12.12 so local/dev/Fly all match what CI now runs:
+> ```bash
+> brew update && brew upgrade pyenv
+> pyenv install 3.12.12
+> PYENV_VERSION=3.12.12 python -m venv .venv
+> source .venv/bin/activate
+> pip install --upgrade pip setuptools
+> pip install -e ".[dev]"
+> ```
 - *Why we pin yt-dlp to 2025.10.22:* the 2025.11+ releases require the external “EJS” bundle (GitHub-hosted challenge solver scripts) which is currently unavailable in Fly deployments, so we temporarily stay on the last pre-EJS version to keep downloads working. Remove the pin once we can bundle the new solver assets.
 
 ### Running multiple local instances
