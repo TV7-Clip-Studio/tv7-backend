@@ -17,11 +17,6 @@ async def upload_asset(file: UploadFile = File(...)) -> AssetUploadResponse:
     """Accept multipart asset upload from Flutter; store under MEDIA_STORAGE_DIR."""
 
     max_bytes = settings.UPLOAD_MAX_FILE_SIZE_MB * 1024 * 1024
-    if file.size and file.size > max_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail="Asset exceeds configured size limit",
-        )
 
     try:
         stored = await store_uploaded_asset(file, max_bytes=max_bytes)
