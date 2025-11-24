@@ -43,6 +43,7 @@
 - 1.9 Create `services/subtitle_styler.py` to extract transcript snippets, render social-style captions (font, outline, positioning), burn them into the clip, and update `Clip.local_path` + `status=ready`.
 - 1.10 Expose `GET /status/{video_id}` (overall state + per-clip summaries) and `GET /videos/{video_id}/clips` (detailed clip metadata, previews, captions) for polling and UI consumption.
 - 1.11 Add alternate ingest flow allowing operators to upload local video files: extend `/videos/ingest` + admin UI to accept uploads OR YouTube URLs, persist binaries to media storage, capture metadata, and adapt the processing pipeline to treat uploaded files as first-class sources alongside downloads.
+- 1.12 Define publish contract for Flutter client + backend; backend retains platform OAuth, asset intake, and publish job orchestration; client triggers and polls.
 
 ## Phase 2 — Operational Polish (Queued)
 - 2.1 Add `PublishJob` ORM model/migration covering platform enum, status, response payload, timestamps.

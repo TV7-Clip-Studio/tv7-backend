@@ -71,7 +71,7 @@ async def ingest_upload_endpoint(
 ) -> VideoIngestResponse:
     if not file.filename:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Uploaded file name missing",
         )
 
@@ -79,7 +79,7 @@ async def ingest_upload_endpoint(
         stored = await persist_upload_temporarily(file)
     except UploadTooLargeError as exc:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail=str(exc),
         ) from exc
     except UploadError as exc:

@@ -441,7 +441,7 @@ async def ingest_from_dashboard(
             request,
             "admin/videos.html",
             context,
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         )
 
     response: Response
