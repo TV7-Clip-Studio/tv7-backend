@@ -77,6 +77,7 @@ All endpoints remain within the FastAPI application. Swagger `/docs` should desc
 - **Observability:** Record timestamps and durations per pipeline stage; expose them via logs and metrics to surface bottlenecks (download time, LLM latency, ffmpeg performance).
 - **Admin credentials:** Rotate the HTTP Basic credentials via `make admin-credentials` (writes to `.env`, syncs Fly secrets, and prints the values) before deploying.
 - **Extensibility:** Additional services (thumbnail generation, branded overlays, true publisher integrations) should build atop these core models without splitting the codebase.
+- **Publishing contract:** Backend owns platform OAuth/tokens, asset intake, and job orchestration; the Flutter client only triggers/polls. See `docs/core/publishing_contract.md` for the agreed split.
 
 ## Media Storage & Rendering Workspace
 - **Directory contract:** All media lives under `MEDIA_STORAGE_DIR` (default `./media`). Each video owns:

@@ -37,7 +37,12 @@ def _ffprobe_duration_seconds(path: Path) -> int:
             check=True,
             capture_output=True,
             text=True,
+            timeout=settings.UPLOAD_NORMALIZATION_TIMEOUT_SECONDS,
         )  # nosec B603
+    except subprocess.TimeoutExpired as exc:
+        raise VideoNormalizationError(
+            f"ffprobe timed out after {settings.UPLOAD_NORMALIZATION_TIMEOUT_SECONDS}s"
+        ) from exc
     except FileNotFoundError as exc:  # pragma: no cover
         raise VideoNormalizationError(f"ffprobe not found: {exc}") from exc
     except subprocess.CalledProcessError as exc:
@@ -93,7 +98,12 @@ def normalize_uploaded_video(video_id: int, source_path: Path) -> VideoNormaliza
             check=True,
             capture_output=True,
             text=True,
+            timeout=settings.UPLOAD_NORMALIZATION_TIMEOUT_SECONDS,
         )  # nosec B603
+    except subprocess.TimeoutExpired as exc:
+        raise VideoNormalizationError(
+            f"ffmpeg timed out after {settings.UPLOAD_NORMALIZATION_TIMEOUT_SECONDS}s"
+        ) from exc
     except FileNotFoundError as exc:  # pragma: no cover
         raise VideoNormalizationError(f"ffmpeg not found: {exc}") from exc
     except subprocess.CalledProcessError as exc:

@@ -9,7 +9,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.security import hash_password
-from app.db.models import User
+from app.db.models import Clip, ClipStatus, User, Video, VideoIngestType, VideoStatus
 from app.deps import db as db_deps
 from app.main import app
 
@@ -58,6 +58,38 @@ async def system_client(
             yield client
 
     app.dependency_overrides.pop(db_deps.get_session, None)
+
+
+@pytest.fixture
+async def seeded_video(
+    system_client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> dict[str, object]:
+    """Create a video with one clip for publish system tests."""
+
+    _ = system_client  # ensure auth/session fixture is initialized
+
+    async with session_factory() as session:
+        video = Video(
+            source_url="upload://fixture",
+            status=VideoStatus.READY.value,
+            ingest_type=VideoIngestType.UPLOAD.value,
+        )
+        session.add(video)
+        await session.flush()
+        clip = Clip(
+            video_id=video.id,
+            start_sec=0,
+            end_sec=10,
+            status=ClipStatus.READY.value,
+            local_path="/media/clips/dummy.mp4",
+        )
+        session.add(clip)
+        await session.commit()
+        await session.refresh(clip)
+        return {
+            "id": video.id,
+            "clips": [{"id": clip.id}],
+        }
 
 
 @pytest.fixture

@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.core.jwt import TokenType
-from app.db.models import ClipGenerationMode, ClipStatus, VideoIngestType, VideoStatus
+from app.db.models import (
+    ClipGenerationMode,
+    ClipStatus,
+    PublishJobStatus,
+    VideoIngestType,
+    VideoStatus,
+)
 
 
 class Health(BaseModel):
@@ -57,6 +64,10 @@ class ClipRead(BaseModel):
     start_sec: int
     end_sec: int
     local_path: str | None
+    asset_url: str | None = None
+    asset_checksum: str | None = None
+    asset_size_bytes: int | None = None
+    ready_local_only: bool = False
     caption_text: str | None
     render_width: int | None = None
     render_height: int | None = None
@@ -92,3 +103,42 @@ class VideoRead(BaseModel):
     clips: list[ClipRead] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PublishJobRead(BaseModel):
+    id: int
+    clip_id: int
+    platform: str
+    status: PublishJobStatus
+    asset_url: str | None = None
+    asset_checksum: str | None = None
+    asset_size_bytes: int | None = None
+    response_payload: str | None = None
+    error_message: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PublishRequest(BaseModel):
+    platforms: list[str]
+    asset_url: str | None = None
+    asset_checksum: str | None = None
+    asset_size_bytes: int | None = None
+
+
+class ConfigRead(BaseModel):
+    publishing_enabled: bool
+    asset_upload_required: bool
+    allowed_platforms: list[str]
+    max_asset_size_bytes: int | None = None
+    max_video_duration_seconds: int | None = None
+    publish_modes: list[Literal["backend_publish", "local_only"]] = Field(default_factory=list)
+
+
+class AssetUploadResponse(BaseModel):
+    asset_url: str
+    asset_checksum: str
+    asset_size_bytes: int
+    content_type: str | None = None

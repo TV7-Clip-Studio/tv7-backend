@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -29,3 +30,24 @@ def test_normalize_uploaded_video(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     assert Path(result.normalized_path).exists()
     assert result.duration_seconds == 42
     assert not source.exists()
+
+
+def test_normalize_uploaded_video_timeout(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    source = tmp_path / "source.mov"
+    source.write_bytes(b"raw-video")
+
+    def fake_storage(video_id: int) -> Path:  # noqa: ARG001
+        target = tmp_path / "videos" / "storage"
+        target.mkdir(parents=True, exist_ok=True)
+        return target
+
+    def fake_run(cmd: list[str], **_: Any) -> None:  # noqa: ARG001
+        raise subprocess.TimeoutExpired(cmd, timeout=5)
+
+    monkeypatch.setattr(video_normalizer, "ensure_video_storage", fake_storage)
+    monkeypatch.setattr(video_normalizer.subprocess, "run", fake_run)
+
+    with pytest.raises(video_normalizer.VideoNormalizationError) as excinfo:
+        video_normalizer.normalize_uploaded_video(1, source)
+
+    assert "timed out" in str(excinfo.value)
