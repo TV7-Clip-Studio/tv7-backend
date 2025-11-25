@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException, status
 
-from app.core.jwt import TokenType, create_token, decode_token
+from app.core.jwt import JWTDecodeError, TokenType, create_token, decode_token
 from app.core.security import verify_password
 from app.db.models import User
 from app.repositories.users import UserRepository
@@ -33,7 +33,12 @@ async def resolve_user_from_token(
     *,
     expected_type: TokenType = TokenType.ACCESS,
 ) -> User:
-    payload = decode_token(token, expected_type=expected_type)
+    try:
+        payload = decode_token(token, expected_type=expected_type)
+    except JWTDecodeError as err:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+        ) from err
     subject = payload.get("sub")
     if subject is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
