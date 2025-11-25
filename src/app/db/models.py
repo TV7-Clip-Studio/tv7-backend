@@ -4,6 +4,7 @@ from datetime import datetime
 from enum import Enum
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     Float,
@@ -15,6 +16,8 @@ from sqlalchemy import (
     func,
     text,
 )
+
+# ... (skipping unchanged lines)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -141,7 +144,7 @@ class Video(Base):
     )
     original_filename: Mapped[str | None] = mapped_column(String(512), nullable=True)
     upload_checksum: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    upload_file_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    upload_file_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     upload_original_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     transcript_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     transcript_language: Mapped[str | None] = mapped_column(String(16), nullable=True)
@@ -152,7 +155,7 @@ class Video(Base):
         index=True,
     )
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    file_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    file_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     workspace_root: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     render_batch_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -197,7 +200,7 @@ class Clip(Base):
     local_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     asset_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     asset_checksum: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    asset_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    asset_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     ready_local_only: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("FALSE"), default=False
     )
@@ -205,7 +208,7 @@ class Clip(Base):
     render_width: Mapped[int | None] = mapped_column(Integer, nullable=True)
     render_height: Mapped[int | None] = mapped_column(Integer, nullable=True)
     frame_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
-    file_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    file_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     thumbnail_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     status: Mapped[str] = mapped_column(
         String(32),
@@ -251,7 +254,7 @@ class PublishJob(Base):
     )
     asset_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     asset_checksum: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    asset_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    asset_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     response_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
