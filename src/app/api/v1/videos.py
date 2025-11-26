@@ -17,7 +17,7 @@ from app.db.models import (
 from app.deps.db import get_session, get_video_repository
 from app.repositories.clips import ClipRepository
 from app.repositories.videos import VideoRepository
-from app.schemas import VideoRead
+from app.schemas import ClipRead, VideoRead
 from app.services.upload_storage import (
     UploadError,
     UploadTooLargeError,
@@ -58,6 +58,7 @@ class ClipUpsert(BaseModel):
     render_height: int | None = None
     frame_rate: float | None = None
     file_size_bytes: int | None = None
+    thumbnail_path: str | None = None
     status: ClipStatus = ClipStatus.READY
 
 
@@ -77,6 +78,10 @@ class LocalVideoCreate(BaseModel):
     status: VideoStatus = VideoStatus.READY
     clip_generation_mode: ClipGenerationMode = ClipGenerationMode.REPLACE
     clips: list[ClipUpsert] | None = None
+    metadata_only: bool = Field(
+        default=False,
+        description="If true, server will not attempt to download or host the source video.",
+    )
 
 
 @router.post(
@@ -203,6 +208,47 @@ async def get_video_status(
 
 
 @router.post(
+    "/{video_id}/clips",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ClipRead,
+)
+async def create_clip_for_video(
+    video_id: int,
+    payload: ClipUpsert,
+    session: AsyncSession = Depends(get_session),
+) -> ClipRead:
+    video_repo = VideoRepository(session)
+    clip_repo = ClipRepository(session)
+
+    video = await video_repo.get(video_id)
+    if not video:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found")
+
+    clip = Clip(
+        video_id=video.id,
+        start_sec=payload.start_sec,
+        end_sec=payload.end_sec,
+        local_path=payload.local_path,
+        asset_url=payload.asset_url,
+        asset_checksum=payload.asset_checksum,
+        asset_size_bytes=payload.asset_size_bytes,
+        ready_local_only=payload.ready_local_only,
+        caption_text=payload.caption_text,
+        render_width=payload.render_width,
+        render_height=payload.render_height,
+        frame_rate=payload.frame_rate,
+        file_size_bytes=payload.file_size_bytes,
+        thumbnail_path=payload.thumbnail_path,
+        status=payload.status.value,
+    )
+    await clip_repo.add(clip)
+    await session.commit()
+    await session.refresh(clip)
+
+    return cast(ClipRead, ClipRead.model_validate(clip, from_attributes=True))
+
+
+@router.post(
     "/local",
     status_code=status.HTTP_201_CREATED,
     response_model=VideoRead,
@@ -213,6 +259,10 @@ async def register_local_video(
 ) -> VideoRead:
     video_repo = VideoRepository(session)
     clip_repo = ClipRepository(session)
+
+    # Desktop-managed entries never upload source media to the server.
+    video_status = VideoStatus.READY
+    payload = payload.copy(update={"local_path": None})
 
     video = Video(
         source_url=payload.source_url,
@@ -226,7 +276,7 @@ async def register_local_video(
         duration_seconds=payload.duration_seconds,
         file_size_bytes=payload.file_size_bytes,
         workspace_root=payload.workspace_root,
-        status=payload.status.value,
+        status=video_status.value,
         clip_generation_mode=payload.clip_generation_mode.value,
     )
     await video_repo.add(video)

@@ -128,7 +128,7 @@
       {% endif %}
     {% endif %}
 
-    {# Source Video Player #}
+    {# Source Video Player / Placeholder #}
     {% if video.local_path %}
       <div id="video-player" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(148,163,184,0.15);">
         <h3 style="margin: 0 0 1rem; font-size: 1.1rem; color: #e2e8f0;">Source Video</h3>
@@ -143,10 +143,25 @@
           </video>
         </div>
         <p style="margin: 0.75rem 0 0; color: #64748b; font-size: 0.85rem;">
-          Downloaded from YouTube •
+          {% if video.ingest_type == 'youtube' %}Downloaded from YouTube{% else %}Uploaded file{% endif %} •
           {% if video.duration_seconds %}{{ video.duration_seconds }}s • {% endif %}
           {% if video.file_size_bytes %}{{ "%.1f"|format(video.file_size_bytes / 1024 / 1024) }} MB{% endif %}
         </p>
+      </div>
+    {% elif video.status == 'ready' %}
+      <div id="video-placeholder" style="margin-top: 1.5rem; padding: 1.5rem; background: rgba(30,41,59,0.5); border: 1px dashed rgba(148,163,184,0.3); border-radius: 8px;">
+        <p style="margin: 0; color: #cbd5e1; font-size: 0.95rem;">
+          No source video stored on server. This entry was provided by the desktop client with local media.
+        </p>
+        {% set thumb = None %}
+        {% if video.clips and video.clips[0].thumbnail_path %}
+          {% set thumb = video.clips[0].thumbnail_path %}
+        {% endif %}
+        {% if thumb %}
+          <div style="margin-top: 1rem; text-align: center;">
+            <img src="{{ thumb }}" alt="Video thumbnail" style="max-width: 100%; border-radius: 8px;">
+          </div>
+        {% endif %}
       </div>
     {% elif video.status == 'processing' %}
       <div id="download-pending" style="margin-top: 1.5rem; padding: 2rem; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3); border-radius: 8px; text-align: center;">
@@ -237,6 +252,18 @@
                 </div>
                 <p style="margin: 0.5rem 0 0; font-size: 0.75rem; color: #64748b;">
                   <code>{{ clip.local_path }}</code>
+                </p>
+              </div>
+            {% elif clip.thumbnail_path %}
+              <div style="margin-bottom: 0.75rem;">
+                <p style="margin: 0 0 0.5rem; font-size: 0.85rem; color: #94a3b8;">
+                  <strong>Thumbnail:</strong>
+                </p>
+                <div style="background: rgba(15,23,42,0.8); border-radius: 8px; padding: 1rem; text-align: center;">
+                  <img src="{{ clip.thumbnail_path }}" alt="Clip thumbnail" style="max-width: 100%; border-radius: 8px;">
+                </div>
+                <p style="margin: 0.5rem 0 0; font-size: 0.75rem; color: #64748b;">
+                  <code>{{ clip.thumbnail_path }}</code>
                 </p>
               </div>
             {% else %}
