@@ -66,6 +66,10 @@ class LocalVideoCreate(BaseModel):
     source_url: str = Field(
         ..., description="Identifier for the local video (e.g., file:// or local://)"
     )
+    title: str | None = Field(
+        default=None,
+        description="Human-friendly title from desktop (mapped to original_filename).",
+    )
     local_path: str | None = None
     original_filename: str | None = None
     upload_checksum: str | None = None
@@ -268,7 +272,7 @@ async def register_local_video(
         source_url=payload.source_url,
         local_path=payload.local_path,
         ingest_type=VideoIngestType.UPLOAD.value,
-        original_filename=payload.original_filename,
+        original_filename=payload.title or payload.original_filename,
         upload_checksum=payload.upload_checksum,
         upload_file_size_bytes=payload.upload_file_size_bytes,
         transcript_text=payload.transcript_text,

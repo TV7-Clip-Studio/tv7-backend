@@ -420,6 +420,63 @@
         }
       }
     },
+    "/api/v1/videos/{video_id}/clips": {
+      "post": {
+        "tags": [
+          "videos"
+        ],
+        "summary": "Create Clip For Video",
+        "operationId": "create_clip_for_video_api_v1_videos__video_id__clips_post",
+        "parameters": [
+          {
+            "name": "video_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Video Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClipUpsert"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClipRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/videos/local": {
       "post": {
         "tags": [
@@ -1801,6 +1858,17 @@
             ],
             "title": "File Size Bytes"
           },
+          "thumbnail_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Path"
+          },
           "status": {
             "$ref": "#/components/schemas/ClipStatus",
             "default": "ready"
@@ -2305,14 +2373,7 @@
         "properties": {
           "loc": {
             "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                }
-              ]
+              "type": "string"
             },
             "type": "array",
             "title": "Location"
