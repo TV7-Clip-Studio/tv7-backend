@@ -17,33 +17,15 @@
 - 0.12 ✅ Introduce admin-route authentication scaffold (basic auth or shared secret) ready to wrap upcoming `/admin/*` endpoints.
 - 0.13 ✅ Establish operator admin access: seed an initial admin user or configure an allowlist/env-backed credential for `/admin/*`, and document rotation steps.
 
-## Phase 1 — Shorts MVP (🚧 Active)
-- 1.1 ✅ Define `Video` and `Clip` ORM models with enums/status columns, transcript/file path fields, and generate Alembic migrations to create the backing tables.
-- 1.2 ✅ Implement `POST /videos/ingest/youtube` inside `api/v1` (with `/ingest` alias) that validates the YouTube URL, creates a `Video` record (`status=ingested`), and enqueues the processing workflow.
-- 1.3 ✅ Build background execution infrastructure (Celery/RQ/Dramatiq or equivalent) plus a task orchestrator that runs the ingestion → highlight → clipping stages off-thread.
-- 1.4.0 ✅ Refactor v1 API routers into service/repository layers, introduce shared DB dependencies, add end-to-end system tests, and lay the groundwork for JWT-based authentication.
-- 1.4.1 ✅ Add JWT configuration, token utilities, and auth service for issuing access/refresh tokens.
-- 1.4.2 ✅ Replace beta-key dependencies with JWT bearer auth across protected routers, update Swagger security schemes, and add login endpoints.
-- 1.4.3 ✅ Update tests/docs to reflect the JWT flow (system/integration suites request tokens) and finalize beta-key deprecation plan.
-- 1.5.1 ✅ Build authenticated operator dashboard: HTML login backed by JWT cookies, `/admin` templates for video and clip views, ingestion form, and publish controls (stub).
-- 1.5.2 ✅ Deliver internal admin routes `/admin/videos` and `/admin/videos/{video_id}` with Jinja templates: list view, per-video clip gallery, preview players, and buttons wired to the publish endpoint stub.
-- 1.5.3 ✅ Add admin-side ingestion workflow: `/admin/videos/new` (or inline modal) that lets operators paste a YouTube URL (now also toggle to upload), submits to the ingest endpoint, and shows immediate feedback/status polling.
-- 1.6.a ✅ Add yt-dlp and youtube-transcript-api dependencies; configure storage directory, quality, and file size limits.
-- 1.6.b ✅ Create `services/youtube_downloader.py` with video download logic, transcript fetching (manual/auto fallback), error handling for size limits and failures.
-- 1.6.c ✅ Extend Video model with duration_seconds, file_size_bytes, error_message fields and generate Alembic migration.
-- 1.6.d ✅ Wire downloader into task pipeline (`tasks.download_video`); update Video records with download results; handle errors gracefully and set status=ERROR.
-- 1.7.a ✅ Add OpenAI dependency and OPENAI_API_KEY configuration setting.
-- 1.7.b ✅ Design highlight detector LLM prompt for identifying engaging short-form segments; create Pydantic response schema for validation.
-- 1.7.c ✅ Create `services/highlight_detector.py` with OpenAI integration, segment validation (15-90s duration), error handling, and ClipSegment dataclass.
-- 1.7.d ✅ Wire highlight detector into task pipeline (`tasks.detect_highlights`); create Clip records with status=RENDERING; handle errors and set Video status=ERROR on failure.
-- 1.8 Build `services/clipper.py` that slices video segments with ffmpeg, converts to 9:16 framing, manages temp files, and hands off to the subtitle renderer.
-  - 1.8.a ✅ Design rendering workspace and storage layout (per-video temp directories, clip output paths, metadata fields) — added `VideoWorkspace` helper, clip render metadata fields, and media directory scaffolding.
-  - 1.8.b ✅ Add ffmpeg-based slicing + reframing, with idempotent handling when clips already exist — implemented `services/clipper.py`, new Dramatiq render stage, and metadata capture on each clip.
-  - 1.8.c ✅ Wire clip rendering jobs into Dramatiq so each Clip transitions from `rendering` to `ready` — introduced per-clip actors with render batches, parallel fan-out, and automatic finalization once all renders succeed.
-- 1.9 Create `services/subtitle_styler.py` to extract transcript snippets, render social-style captions (font, outline, positioning), burn them into the clip, and update `Clip.local_path` + `status=ready`.
-- 1.10 Expose `GET /status/{video_id}` (overall state + per-clip summaries) and `GET /videos/{video_id}/clips` (detailed clip metadata, previews, captions) for polling and UI consumption.
-- 1.11 Add alternate ingest flow allowing operators to upload local video files: extend `/videos/ingest` + admin UI to accept uploads OR YouTube URLs, persist binaries to media storage, capture metadata, and adapt the processing pipeline to treat uploaded files as first-class sources alongside downloads.
-- 1.12 Define publish contract for Flutter client + backend; backend retains platform OAuth, asset intake, and publish job orchestration; client triggers and polls.
+## Phase 1 — Desktop-first Clips (🚧 Active)
+- 1.1 ✅ Define `Video`/`Clip` models and migrations; add duration/file size/thumbnail/transcript metadata fields.
+- 1.2 ✅ Support metadata-only desktop submissions: `/api/v1/videos/local` stores descriptors (no source upload), clips arrive ready with thumbnails; admin UI reflects clip-only entries.
+- 1.3 ✅ JWT auth across protected routers; admin login via JWT cookies.
+- 1.4 ✅ Admin UI: list/detail views showing clip thumbnails and metadata; remove backend ingest controls.
+- 1.5 🔜 Clip sync contract for Flutter: login, register video metadata, POST clips with thumbnails/previews; document in `docs/temp/desktop_backend_coordination.md`.
+- 1.6 🔜 Clean up legacy ingest pipeline references (yt-dlp, download/render tasks) and slim services to metadata/publishing only.
+- 1.7 🔜 Expose read-only APIs for desktop to confirm uploaded clips (poll status) and for admin to view clip groups.
+- 1.8 🔜 Optional: migration script to null legacy `local_path` for desktop-ingested records to avoid source player in admin UI.
 
 ## Phase 2 — Operational Polish (Queued)
 - 2.1 Add `PublishJob` ORM model/migration covering platform enum, status, response payload, timestamps.

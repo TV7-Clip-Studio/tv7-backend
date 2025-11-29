@@ -14,7 +14,11 @@ src/app/admin/routes.py
 src/app/api/v1/__init__.py
 src/app/api/v1/ai.py
 src/app/api/v1/auth.py
+src/app/api/v1/clips.py
+src/app/api/v1/config.py
+src/app/api/v1/publish.py
 src/app/api/v1/routes.py
+src/app/api/v1/uploads.py
 src/app/api/v1/users.py
 src/app/api/v1/videos.py
 src/app/core/config.py
@@ -30,6 +34,7 @@ src/app/deps/rate_limit.py
 src/app/deps/security.py
 src/app/repositories/__init__.py
 src/app/repositories/clips.py
+src/app/repositories/publish_jobs.py
 src/app/repositories/users.py
 src/app/repositories/videos.py
 src/app/repositories/youtube_credentials.py
@@ -62,6 +67,7 @@ tests/test_errors.py
 tests/test_health.py
 tests/test_ingest_service.py
 tests/test_main_endpoints.py
+tests/test_publish_jobs_repository.py
 tests/test_render_workspace.py
 tests/test_tasks.py
 tests/test_transcription.py

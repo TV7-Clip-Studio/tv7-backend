@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.db.models import User
 from app.deps.rate_limit import check_rate
 from app.deps.security import require_jwt_user
 from app.services.ai import execute_agent
+from app.services.highlight_detector import ClipSegment, detect_highlights
 
 router = APIRouter()
 
@@ -23,6 +24,49 @@ class AIRequest(BaseModel):
 class AIResponse(BaseModel):
     output: str
     meta: dict[str, Any] = Field(default_factory=dict)
+
+
+class HighlightRequest(BaseModel):
+    transcript: str
+    duration_seconds: int
+    video_id: int = 0  # Optional, for logging
+    transcript_language: str | None = None
+    max_clips: int | None = Field(default=None, ge=1, le=8, description="Optional cap on clips")
+
+
+class HighlightResponse(BaseModel):
+    clips: list[ClipSegment]
+
+
+@router.post("/highlights", response_model=HighlightResponse)
+async def generate_highlights(
+    payload: HighlightRequest,
+    current_user: User = Depends(require_jwt_user),
+) -> HighlightResponse:
+    check_rate(current_user.email)
+    if not payload.transcript or not payload.transcript.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Transcript is required"
+        )
+    if payload.duration_seconds <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="duration_seconds must be > 0"
+        )
+    try:
+        segments = await detect_highlights(
+            transcript=payload.transcript,
+            duration_seconds=payload.duration_seconds,
+            video_id=payload.video_id,
+            transcript_language=payload.transcript_language,
+        )
+    except Exception as exc:  # HighlightDetectionError propagates here
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    if payload.max_clips is not None:
+        segments = segments[: payload.max_clips]
+    return HighlightResponse(clips=segments)
 
 
 @router.post("/execute", response_model=AIResponse)

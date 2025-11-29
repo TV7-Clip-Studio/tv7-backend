@@ -73,10 +73,10 @@ class HighlightDetectionResponse(BaseModel):
 SYSTEM_PROMPT = """You are an expert at identifying engaging short-form video content for platforms like YouTube Shorts, TikTok, and Instagram Reels.
 
 Given a video transcript, your task is to:
-1. Identify 3-5 segments that would make compelling standalone short-form clips (30-60 seconds each)
+1. Identify 3-4 segments that would make compelling standalone short-form clips (20-60 seconds each)
 2. For each segment, provide:
    - start_sec: Starting timestamp in seconds
-   - end_sec: Ending timestamp in seconds (segments should be 30-60 seconds long)
+   - end_sec: Ending timestamp in seconds (segments should be 15-30 seconds long)
    - hook: A short, engaging caption/hook text (1-2 sentences max) that would draw viewers in
 
 Focus on segments that:
@@ -91,6 +91,7 @@ Respond ONLY with valid JSON in this exact format:
   "clips": [
     {"start_sec": 45, "end_sec": 90, "hook": "The surprising truth about..."},
     {"start_sec": 120, "end_sec": 165, "hook": "What happens next is unbelievable"},
+    {"start_sec": 200, "end_sec": 240, "hook": "Another engaging moment..."}
     ...
   ]
 }"""

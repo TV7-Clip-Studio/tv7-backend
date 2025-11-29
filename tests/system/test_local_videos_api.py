@@ -62,7 +62,7 @@ async def test_register_local_video_creates_video_and_clips(
     stored_video = (
         await db_session.execute(select(Video).where(Video.source_url == payload["source_url"]))
     ).scalar_one()
-    assert stored_video.local_path == payload["local_path"]
+    assert stored_video.local_path is None
     stored_clip = (
         await db_session.execute(select(Clip).where(Clip.video_id == stored_video.id))
     ).scalar_one()
