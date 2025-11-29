@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.db.models import User
@@ -45,14 +45,10 @@ async def generate_highlights(
 ) -> HighlightResponse:
     check_rate(current_user.email)
     if not payload.transcript or not payload.transcript.strip():
-        from fastapi import HTTPException, status
-
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Transcript is required"
         )
     if payload.duration_seconds <= 0:
-        from fastapi import HTTPException, status
-
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="duration_seconds must be > 0"
         )
@@ -64,8 +60,6 @@ async def generate_highlights(
             transcript_language=payload.transcript_language,
         )
     except Exception as exc:  # HighlightDetectionError propagates here
-        from fastapi import HTTPException, status
-
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
