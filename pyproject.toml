@@ -83,6 +83,7 @@ addopts = [
   "--cov-fail-under=85",
 ]
 asyncio_mode = "auto"
+pythonpath = ["src"]
 markers = [
   "no_db_override: run test without overriding database dependencies",
   "integration: tests that hit real services (Postgres, etc.)",

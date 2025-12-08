@@ -1,0 +1,63 @@
+name: AI Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  determine-context:
+    runs-on: ubuntu-latest
+    outputs:
+      info: ${{ steps.context.outputs.info }}
+    steps:
+      - name: Determine Python/FastAPI context
+        id: context
+        run: |
+          set -eo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import tomllib
+          from pathlib import Path
+
+          pyproject = Path("pyproject.toml")
+          requirements = Path("requirements.txt")
+
+          info = "General Codebase"
+
+          if pyproject.exists():
+              data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+              deps = data.get("tool", {}).get("poetry", {}).get("dependencies", {})
+              python_req = deps.pop("python", "unknown")
+              key_deps = []
+              for name, val in deps.items():
+                  if len(key_deps) >= 4:
+                      break
+                  if isinstance(val, str):
+                      key_deps.append(f"{name} {val}")
+                  elif isinstance(val, dict) and "version" in val:
+                      key_deps.append(f"{name} {val['version']}")
+              info = f"Python {python_req}; key deps: {', '.join(key_deps) if key_deps else 'n/a'} (pyproject.toml)"
+          elif requirements.exists():
+              key_deps = []
+              for line in requirements.read_text(encoding="utf-8").splitlines():
+                  line = line.strip()
+                  if not line or line.startswith("#"):
+                      continue
+                  if len(key_deps) >= 4:
+                      break
+                  key_deps.append(line)
+              info = f"Python (requirements.txt); key deps: {', '.join(key_deps) if key_deps else 'n/a'}"
+
+          print(f"info={info}")
+          PY
+
+  deepseek-review:
+    needs: determine-context
+    uses: TV7-Clip-Studio/tv7-core/.github/workflows/deepseek-review.yml@main
+    with:
+      project_context: ${{ needs.determine-context.outputs.info }}
+    secrets: inherit
