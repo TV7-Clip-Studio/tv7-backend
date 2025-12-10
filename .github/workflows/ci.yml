@@ -10,7 +10,12 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12.12" }
       - name: Fetch tv7-core (sibling)
-        run: git clone --depth 1 --branch "${CORE_REF}" https://github.com/TV7-Clip-Studio/tv7-core.git ../tv7-core
+        run: |
+          git clone --depth 1 --branch "${CORE_REF}" \
+            https://x-access-token:${GITHUB_TOKEN}@github.com/TV7-Clip-Studio/tv7-core.git \
+            ../tv7-core
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: make deps
       - run: make fmt && make lint && make type && make sec
       - run: make testcov
