@@ -54,24 +54,36 @@ else
 UP_FLAGS += -d
 endif
 
-CORE_DIR := ../tv7-core
-ifeq ("$(wildcard $(CORE_DIR))","")
-$(error tv7-core not found. Please clone it as a sibling directory: ../tv7-core)
-endif
+CORE_DIR ?= ../tv7-core
+CORE_URL ?= https://github.com/TV7-Clip-Studio/tv7-core.git
+SKIP_CORE ?= 0
 
--include Makefile.core
+ifeq ("$(SKIP_CORE)","1")
+  # Core checks skipped (CI override or emergency)
+else
+  ifeq ("$(wildcard $(CORE_DIR))","")
+  $(error tv7-core not found. Please clone it as a sibling directory: $(CORE_DIR) (or set SKIP_CORE=1 to bypass))
+  endif
+  -include Makefile.core
+endif
 
 .PHONY: deps run test testcov fmt lint type sec precommit \
         revision upgrade downgrade migrate up down build restart logs dev smoke \
         smoke-fly pipeline-smoke ui-smoke \
         admin-credentials worker \
-        test-integration test-ui test-ui-visual test-suite
+        test-integration test-ui test-ui-visual test-suite \
+        core-init
 
 deps:
 	@[ -d $(VENV) ] || python -m venv $(VENV)
 	@$(PIP) -q install --upgrade pip
 	@$(PIP) -q install -e ".[dev]"
 	@$(VENV)/bin/pre-commit install
+
+core-init:
+	@if [ -d "$(CORE_DIR)/.git" ]; then echo "tv7-core already present at $(CORE_DIR)"; exit 0; fi
+	@mkdir -p "$(dir $(CORE_DIR))"
+	@git clone --depth 1 "$(CORE_URL)" "$(CORE_DIR)"
 
 run: deps
 	$(UV) PYTHONPATH=src app.main:app --host 0.0.0.0 --port 8000 --reload
