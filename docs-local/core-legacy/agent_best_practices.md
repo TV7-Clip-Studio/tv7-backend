@@ -11,13 +11,8 @@ I'm working on the TV7 project, a FastAPI service that converts YouTube videos i
 
 First, I'll read the documentation in this order:
 0. docs/agent_best_practices.md - This file, for coding standards and workflow
-1. docs/INDEX.md - Navigation hub to understand the documentation structure
-2. docs/architecture.md - System design, domain model, and API layering
-3. docs/tech_stack.md - Technologies, libraries, and dependencies
-4. docs/roadmap.md - Current feature plan and completion status
-5. docs/user_flows.md - How operators and API clients use the system
-6. docs/testing.md - Test strategy and where to place new tests
-7. docs/* - any other doc
+1. docs/
+2. 00-tv7-core/docs
 
 
 I understand that:
