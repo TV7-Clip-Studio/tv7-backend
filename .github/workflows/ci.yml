@@ -10,12 +10,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12.12" }
       - name: Fetch tv7-core (sibling)
-        uses: actions/checkout@v4
-        with:
-          repository: TV7-Clip-Studio/tv7-core
-          ref: ${{ env.CORE_REF }}
-          path: ../tv7-core
-          token: ${{ secrets.GITHUB_TOKEN }}
+        run: git clone --depth 1 --branch "${CORE_REF}" https://github.com/TV7-Clip-Studio/tv7-core.git ../tv7-core
       - run: make deps
       - run: make fmt && make lint && make type && make sec
       - run: make testcov
