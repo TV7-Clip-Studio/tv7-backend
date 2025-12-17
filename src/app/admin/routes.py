@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from jose import JWTError, jwt
@@ -114,7 +114,7 @@ def _require_admin(request: Request) -> str:
 
 
 @router.get("/login", response_class=HTMLResponse)
-async def login_form(request: Request) -> HTMLResponse:
+async def login_form(request: Request) -> Response:
     try:
         _require_admin(request)
         return RedirectResponse(url="/admin/dashboard", status_code=status.HTTP_303_SEE_OTHER)
@@ -132,7 +132,7 @@ async def login_submit(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),
-) -> HTMLResponse:
+) -> Response:
     expected_username, expected_password = _ensure_admin_credentials()
     if username != expected_username or password != expected_password:
         return templates.TemplateResponse(
@@ -164,7 +164,7 @@ async def admin_root() -> RedirectResponse:
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request, session: AsyncSession = Depends(get_session)) -> HTMLResponse:
+async def dashboard(request: Request, session: AsyncSession = Depends(get_session)) -> Response:
     try:
         admin_user = _require_admin(request)
     except HTTPException:
@@ -190,7 +190,7 @@ async def dashboard(request: Request, session: AsyncSession = Depends(get_sessio
 async def view_schedule(
     request: Request,
     session: AsyncSession = Depends(get_session),
-) -> HTMLResponse:
+) -> Response:
     try:
         admin_user = _require_admin(request)
     except HTTPException:
@@ -222,7 +222,7 @@ async def update_schedule_entry(
     request: Request,
     form: ScheduleEntryUpdateForm = Depends(ScheduleEntryUpdateForm.as_form),
     session: AsyncSession = Depends(get_session),
-) -> RedirectResponse:
+) -> Response:
     try:
         _require_admin(request)
     except HTTPException:
@@ -252,7 +252,7 @@ async def update_schedule_entry(
 async def list_users(
     request: Request,
     session: AsyncSession = Depends(get_session),
-) -> HTMLResponse:
+) -> Response:
     try:
         admin_user = _require_admin(request)
     except HTTPException:
@@ -321,7 +321,7 @@ async def user_detail(
     user_id: int,
     request: Request,
     session: AsyncSession = Depends(get_session),
-) -> HTMLResponse:
+) -> Response:
     try:
         admin_user = _require_admin(request)
     except HTTPException:
