@@ -1,5 +1,7 @@
 # YouTube Cookies Setup Guide
 
+> Legacy design note: the FastAPI backend no longer downloads or transcribes videos. These instructions are kept for historical reference.
+
 YouTube requires authentication to bypass bot detection when downloading videos. This guide shows how to set up cookies for both local development and production (Fly.io).
 
 ## Why This Is Needed

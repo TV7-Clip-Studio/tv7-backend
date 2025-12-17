@@ -1,5 +1,3 @@
-from __future__ import annotations
+from app.admin.routes import router
 
-from . import routes
-
-__all__ = ["credentials", "routes"]
+__all__ = ["router"]

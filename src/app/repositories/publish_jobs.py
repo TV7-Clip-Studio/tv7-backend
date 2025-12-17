@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,6 +36,10 @@ class PublishJobRepository:
         await self._session.flush()
         await self._session.refresh(job)
         return job
+
+    async def get(self, job_id: int) -> PublishJob | None:
+        job = await self._session.get(PublishJob, job_id)
+        return cast(PublishJob | None, job)
 
     async def list_for_clip(self, clip_id: int) -> list[PublishJob]:
         result = await self._session.execute(

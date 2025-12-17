@@ -1,6 +1,7 @@
 # Roadmap Rationale
 
 > Companion narrative for `docs/roadmap.md`. Each entry clarifies intent, implementation pointers, and notable dependencies so future maintainers can execute without guesswork.
+> Legacy note: Many early entries describe the pre-cleanup media pipeline and prior admin UI. The Phase 1 cleanup removed ingestion/rendering; the current admin surface is a lightweight schedule/metrics dashboard.
 
 ## Phase 0 — Platform Foundation
 
@@ -63,11 +64,13 @@
 - **Why:** The admin UI will expose clips and publish actions; even in MVP form it must be access-controlled.
 - **Implementation overview:** Dependency `require_admin` wraps `fastapi.security.HTTPBasic` and validates credentials sourced from `ADMIN_USERNAME`/`ADMIN_PASSWORD` environment variables. Apply `Depends(require_admin)` to every `/admin/*` route to enforce the challenge-response flow.
 - **Important:** Rotate credentials by updating environment variables and restarting the process. Missing configuration raises a 500 to surface deployment misconfigurations immediately.
+- **Status:** Deprecated; admin UI and Basic auth scaffold were removed in the Phase 1 backend cleanup.
 
 ### 0.13 — Operator admin access ✅
 - **Why:** Authentication alone isn’t enough; we need a predictable way to bootstrap trusted operators.
 - **Implementation overview:** `scripts/admin_credentials.py` (surfaced via `make admin-credentials`) generates a secure password, updates `.env`, and, by default, runs `fly secrets set` for the configured app. Under the hood it relies on `app.admin.credentials` helpers to update .env files safely.
 - **Important:** Rotation is a single command locally; ensure operators have the Fly CLI logged in so the auto-sync succeeds. If it fails, fallback instructions appear in the README.
+- **Status:** Deprecated alongside the admin UI; credential helper scripts were removed in the control-plane-only refactor.
 
 ## Phase 1 — Shorts MVP
 
@@ -80,11 +83,13 @@
 - **Why:** Entry point for the entire pipeline; must validate inputs and return quickly.
 - **Implementation overview:** Added `/api/v1/videos/ingest` (now `/api/v1/videos/ingest/youtube`) that accepts a YouTube URL, validates the domain, upserts a `Video` row with `status=ingested`, and hands off to `services.ingest.enqueue_video` (placeholder until Phase 1.3). Responses include the Pydantic `VideoRead` payload plus `created/queued` flags.
 - **Important:** Duplicate submissions re-queue existing videos without creating new rows. Validation rejects non-YouTube URLs with 422. The enqueue function currently logs; replace with real queue dispatch during Phase 1.3.
+- **Status:** Removed; backend no longer ingests media and now only accepts pre-rendered metadata/uploads.
 
 ### 1.3 — Background execution infrastructure (Dramatiq + Redis) ✅
 - **Why:** Downloading and rendering videos is CPU-bound; requests must not block. We need durable background processing with retries and observability.
 - **Implementation overview:** Introduced Dramatiq with Redis broker (`REDIS_URL`, `DRAMATIQ_BROKER`, `WORKER_CONCURRENCY`), added `scripts/run_worker.py`, and wired Docker Compose/Fly to run a dedicated worker alongside Redis. `app/services/tasks.py` defines actors (`process_video`, `download_video`, `detect_highlights`, `finalize_video`) that currently stub downstream work but drive the state machine (`ingested` → `processing` → `ready`). `services/ingest.enqueue_video` now enqueues the orchestrator actor. Tests cover status transitions and enqueue behavior.
 - **Important:** Placeholder actors log and update database state; modules 1.5–1.8 will replace the stubs with real implementations. Operators should launch Redis + worker locally via `docker compose up redis worker` or `make worker` (stub broker). Fly deployment now includes a worker process group; ensure Redis credentials are configured in secrets.
+- **Status:** Removed in Phase 1 cleanup; Redis/Dramatiq pipeline dropped to keep the backend as a pure control plane.
 
 ### 1.4.0 — API layering + authentication foundations ✅
 - **Why:** Keeping FastAPI routers thin improves readability, reuse, and testability, while preparing for stronger authentication than a shared beta key.

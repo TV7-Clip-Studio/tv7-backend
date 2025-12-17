@@ -102,6 +102,7 @@ I will follow the established patterns in the codebase and ask for clarification
 - **Type safety:** Maintain typing discipline; rely on Ruff+MyPy defaults from `pyproject.toml`. Avoid `Any` unless absolutely necessary and justified in comments.
 
 ## Background Pipeline Guardrails
+- Legacy reference only: the FastAPI backend no longer runs the media pipeline after the Phase 1 cleanup.
 - **Idempotency:** Ensure tasks can be retried without corrupting state (e.g., safe updates, temp file cleanup).
 - **Status transitions:** Update `Video.status`, `Clip.status`, and `PublishJob.status` atomically and document the life cycles in code comments/tests.
 - **Resource hygiene:** Manage temp directories, large file downloads, and ffmpeg processes carefully. Add cleanup hooks when introducing new temp artifacts.
@@ -109,7 +110,7 @@ I will follow the established patterns in the codebase and ask for clarification
 
 ## Operations & Observability
 - **Metrics & logs:** Extend Prometheus counters/histograms and structured logging when building new stages. Include `video_id` / `clip_id` / `job_id` in log contexts.
-- **Admin access:** Use the roadmap’s admin auth scaffolding (`require_admin` + `ADMIN_USERNAME`/`ADMIN_PASSWORD`). Rotate credentials with `make admin-credentials` (auto-syncs Fly secrets when logged in). Never deploy a dashboard without protection.
+- **Admin access:** Deprecated with the Phase 1 cleanup; the admin dashboard and Basic auth scaffold were removed from the control-plane service.
 - **Deployment parity:** Verify local Docker/Compose and Fly.io configurations stay in sync. Update Makefile and docs when new processes (workers, cron) are introduced.
 - **Fly logging:** `fly logs -a forgotten-app` tails everything; use `-j` for JSON and `--machine <id>` if you split API/worker. Output only includes the last ~100 lines unless you stream/redirect, so grab logs immediately when debugging download issues (yt-dlp/ffmpeg errors appear only in worker logs).
 - **Runbooks:** Capture operational steps (rotating admin access, seeding models, troubleshooting workers) in `docs/` as you add features.

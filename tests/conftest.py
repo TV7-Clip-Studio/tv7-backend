@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from collections.abc import AsyncIterator, Generator
 from typing import Any
 from uuid import uuid4
@@ -24,8 +23,6 @@ from app.db import models  # noqa: F401  # ensure metadata registration
 from app.db.base import Base
 from app.db.models import User
 from app.main import app
-
-os.environ.setdefault("DRAMATIQ_BROKER", "stub")
 
 
 @pytest.fixture(scope="session")
@@ -91,7 +88,7 @@ async def configure_app_database(
     db_engine: AsyncEngine,
 ) -> AsyncIterator[None]:
     """Route the app's database utilities to the in-memory test engine."""
-    if request.node.get_closest_marker("no_db_override") or request.node.get_closest_marker("ui"):
+    if request.node.get_closest_marker("no_db_override"):
         yield
         return
 
@@ -106,36 +103,6 @@ async def configure_app_database(
 
     monkeypatch.setattr(db_base, "create_async_engine", _create_engine_stub)
     monkeypatch.setattr(db_base, "async_sessionmaker", _session_factory_stub)
-
-    monkeypatch.setenv("DRAMATIQ_BROKER", "stub")
-    import dramatiq  # noqa: PLC0415
-    from dramatiq.brokers.stub import StubBroker  # noqa: PLC0415
-
-    from app.core import config as app_config  # noqa: PLC0415
-    from app.services import queue as queue_module  # noqa: PLC0415
-    from app.services import tasks as tasks_module  # noqa: PLC0415
-
-    app_config.settings.DRAMATIQ_BROKER = "stub"
-
-    stub_broker = StubBroker()
-
-    def _get_stub_broker() -> StubBroker:
-        return stub_broker
-
-    # Reset the module-level broker singleton
-    queue_module._broker = None
-    monkeypatch.setattr(queue_module, "get_broker", _get_stub_broker, raising=False)
-    monkeypatch.setattr(queue_module, "ensure_broker", _get_stub_broker, raising=False)
-
-    dramatiq.set_broker(stub_broker)
-
-    tasks_module.process_video.broker = stub_broker
-    tasks_module.download_video.broker = stub_broker
-    tasks_module.detect_highlights.broker = stub_broker
-    tasks_module.finalize_video.broker = stub_broker
-
-    assert queue_module.get_broker() is stub_broker
-    assert tasks_module.process_video.broker is stub_broker
 
     async with db_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
