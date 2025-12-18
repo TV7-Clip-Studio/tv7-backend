@@ -15,6 +15,7 @@ jobs:
     outputs:
       info: ${{ steps.context.outputs.info }}
     steps:
+      - uses: actions/checkout@v4
       - name: Determine Python/FastAPI context
         id: context
         run: |
