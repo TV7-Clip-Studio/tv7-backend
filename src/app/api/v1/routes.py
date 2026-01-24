@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 
 from app.deps.security import require_jwt_user
 
-from . import ai, auth, clips, config, publish, uploads, users, videos
+from . import auth, clips, config, publish, uploads, users, videos
 
 api_router = APIRouter()
 
@@ -17,12 +17,6 @@ api_router.include_router(
     clips.router,
     prefix="/clips",
     tags=["clips"],
-    dependencies=[Depends(require_jwt_user)],
-)
-api_router.include_router(
-    ai.router,
-    prefix="/ai",
-    tags=["ai"],
     dependencies=[Depends(require_jwt_user)],
 )
 api_router.include_router(

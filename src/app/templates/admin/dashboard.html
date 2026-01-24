@@ -1,0 +1,25 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<h2>Dashboard</h2>
+<div class="card">
+  <h3>Overview</h3>
+  <div style="display:flex; gap:16px; flex-wrap:wrap;">
+    <div class="card" style="flex:1; min-width:160px;">
+      <div class="muted">Users</div>
+      <div style="font-size:1.5rem;">{{ counts.users }}</div>
+    </div>
+    <div class="card" style="flex:1; min-width:160px;">
+      <div class="muted">Videos</div>
+      <div style="font-size:1.5rem;">{{ counts.videos }}</div>
+    </div>
+    <div class="card" style="flex:1; min-width:160px;">
+      <div class="muted">Clips</div>
+      <div style="font-size:1.5rem;">{{ counts.clips }}</div>
+    </div>
+    <div class="card" style="flex:1; min-width:160px;">
+      <div class="muted">Publish Jobs</div>
+      <div style="font-size:1.5rem;">{{ counts.publish_jobs }}</div>
+    </div>
+  </div>
+</div>
+{% endblock %}

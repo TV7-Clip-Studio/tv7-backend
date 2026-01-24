@@ -18,12 +18,13 @@
 - 0.13 ✅ Establish operator admin access: seed an initial admin user or configure an allowlist/env-backed credential for `/admin/*`, and document rotation steps.
 
 ## Phase 1 — Desktop-first Clips (🚧 Active)
+- _Note: Admin UI and the media pipeline were removed during the Phase 1 cleanup; remaining work focuses on control-plane APIs._
 - 1.1 ✅ Define `Video`/`Clip` models and migrations; add duration/file size/thumbnail/transcript metadata fields.
 - 1.2 ✅ Support metadata-only desktop submissions: `/api/v1/videos/local` stores descriptors (no source upload), clips arrive ready with thumbnails; admin UI reflects clip-only entries.
 - 1.3 ✅ JWT auth across protected routers; admin login via JWT cookies.
 - 1.4 ✅ Admin UI: list/detail views showing clip thumbnails and metadata; remove backend ingest controls.
 - 1.5 🔜 Clip sync contract for Flutter: login, register video metadata, POST clips with thumbnails/previews; document in `docs/temp/desktop_backend_coordination.md`.
-- 1.6 🔜 Clean up legacy ingest pipeline references (yt-dlp, download/render tasks) and slim services to metadata/publishing only.
+- 1.6 ✅ Clean up legacy ingest pipeline references (yt-dlp, download/render tasks) and slim services to metadata/publishing only.
 - 1.7 🔜 Expose read-only APIs for desktop to confirm uploaded clips (poll status) and for admin to view clip groups.
 - 1.8 🔜 Optional: migration script to null legacy `local_path` for desktop-ingested records to avoid source player in admin UI.
 

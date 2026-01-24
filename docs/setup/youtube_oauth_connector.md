@@ -1,5 +1,7 @@
 # YouTube OAuth Connector (Future Enhancement)
 
+> Legacy design note: the FastAPI backend no longer downloads from YouTube. This connector is retained for historical context only.
+
 ## Problem
 
 Cookie-based authentication is fragile:

@@ -24,3 +24,6 @@ media/videos/*
 !media/clips/
 media/clips/*
 !media/clips/.gitkeep
+
+# Packaging artifacts
+*.egg-info/

@@ -1,0 +1,59 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<h2>Schedule</h2>
+<div class="card">
+  <p class="muted">Recent publish jobs (latest 100). Update status or asset URL directly.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Platform</th>
+        <th>Status</th>
+        <th>Clip</th>
+        <th>Video</th>
+        <th>Asset URL</th>
+        <th>Updated</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for job in jobs %}
+      <tr>
+        <td>{{ job.id }}</td>
+        <td>{{ job.platform }}</td>
+        <td>{{ job.status }}</td>
+        <td>#{{ job.clip_id }}</td>
+        <td>
+          {% if job.clip and job.clip.video %}
+            Video #{{ job.clip.video.id }}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td style="max-width:200px; word-break:break-all;">{{ job.asset_url or "—" }}</td>
+        <td>{{ job.updated_at }}</td>
+        <td>
+          <form method="post" action="/admin/schedule/{{ job.id }}">
+            <label class="muted" style="display:block;">Status</label>
+            <select name="status_value">
+              {% for s in statuses %}
+                <option value="{{ s.value }}" {% if s.value == job.status %}selected{% endif %}>{{ s.value }}</option>
+              {% endfor %}
+            </select>
+            <label class="muted" style="display:block; margin-top:6px;">Asset URL</label>
+            <input type="text" name="asset_url" value="{{ job.asset_url or '' }}" placeholder="https://...">
+            <label class="muted" style="display:block; margin-top:6px;">Response payload</label>
+            <input type="text" name="response_payload" value="{{ job.response_payload or '' }}" placeholder="raw response (optional)">
+            <label class="muted" style="display:block; margin-top:6px;">Error message</label>
+            <input type="text" name="error_message" value="{{ job.error_message or '' }}" placeholder="error (optional)">
+            <div style="margin-top:8px;">
+              <button type="submit">Save</button>
+            </div>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

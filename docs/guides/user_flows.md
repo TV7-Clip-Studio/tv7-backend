@@ -1,6 +1,7 @@
 # TV7 User Flows
 
 > End-to-end workflows and user journeys for operators, API clients, and background processes. Focus on the user perspective rather than implementation details.
+> **Legacy notice:** This document captures the legacy admin + media pipeline experience. The FastAPI backend now runs as a control plane; media ingest/rendering remain out-of-scope, and the admin UI is a lightweight dashboard for schedules and metrics.
 
 ---
 

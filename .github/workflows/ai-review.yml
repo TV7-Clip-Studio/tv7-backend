@@ -15,6 +15,7 @@ jobs:
     outputs:
       info: ${{ steps.context.outputs.info }}
     steps:
+      - uses: actions/checkout@v4
       - name: Determine Python/FastAPI context
         id: context
         run: |
@@ -60,4 +61,5 @@ jobs:
     uses: TV7-Clip-Studio/tv7-core/.github/workflows/deepseek-review.yml@main
     with:
       project_context: ${{ needs.determine-context.outputs.info }}
+      architecture_doc: backend_architecture.md
     secrets: inherit

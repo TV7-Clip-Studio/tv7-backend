@@ -1,22 +1,19 @@
 # Testing Strategy
 
 This project keeps separate test layers so contributors can run quick feedback loops locally while still exercising the full deployment shape in CI. Use the following guide when deciding where a new test belongs.
+> **Legacy notice:** Pipeline/system/UI sections reflect the pre-cleanup media workflow. The FastAPI backend now runs as a control plane without ingestion or Dramatiq; admin UI is minimal and currently untested by Playwright.
 
 ## Test Suite Overview
 
 | Suite | Location | Runtime | What it covers |
 | --- | --- | --- | --- |
 | Unit / API | `tests/` | milliseconds–seconds | Pure functions, API routers with dependency overrides, schema serialization, error handling. |
-| System | `tests/system/` | seconds | In-process FastAPI app running with real dependency wiring (lifespan, middleware, repositories) and stubbed external collaborators. Verifies end-to-end request/response behaviour plus database effects. |
-| Integration | `tests/integration/` | seconds–minutes | Full environment using Testcontainers Postgres (or `TEST_DATABASE_URL`) with Alembic migrations. Ensures persistence and infrastructure wiring behave like production. |
-| Regression (optional) | `tests/regression/` | seconds | End-to-end pipeline smoke tests with external services stubbed. Use for deep verification before releases (`make pipeline-smoke`). |
-| UI (optional) | `tests/ui/` | seconds | Playwright browser flows that exercise the admin dashboard against a running stack (`make ui-smoke`). |
+| System (retired) | — | — | Legacy in-process coverage removed with the media pipeline cleanup. |
+| Integration (retired) | — | — | Testcontainers-backed suite removed; reroute new coverage to fast unit/API tests. |
+| Regression (retired) | — | — | Pipeline smoke tests removed alongside ingestion/rendering. |
+| UI (retired) | — | — | Admin dashboard browser flows removed with the admin UI. |
 
-Run the whole suite locally with `make test`. Run `make test-integration` when you need the container-backed checks.
-
-To exercise the full Shorts pipeline with stubbed downloads/highlights, run `make pipeline-smoke`. These regression tests are optional and marked with `@pytest.mark.regression` so they won’t run during the default `make test`. The suite asserts that a video moves from `ingested` to `processing` to `ready`, persists transcript metadata, and creates rendering clips whenever the fake highlight detector returns segments.
-
-To validate interactive admin flows end-to-end, ensure the Docker stack (or Fly staging) is running and then execute `make ui-smoke`. This target installs the Chromium browser once and runs `tests/ui/` against the automatically derived base URL (built from `API_SCHEME`, `API_HOST`, and `API_PORT`). The Playwright test logs into `/admin/videos`, queues a YouTube URL, and verifies the live status timeline embedded in the detail page. Run the server with `DRAMATIQ_BROKER=stub` so the inline pipeline updates the UI immediately without needing a worker. Provide credentials via `ADMIN_USERNAME`/`ADMIN_PASSWORD` and make sure a matching operator exists in the database.
+Run the current suite with `make test` or `make testcov`. Integration/regression/UI targets were removed during the Phase 1 cleanup; add new coverage under `tests/` as the control-plane features evolve.
 
 ## System Tests
 

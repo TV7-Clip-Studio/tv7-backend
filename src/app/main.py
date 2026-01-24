@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.admin.routes import router as admin_router
+from app.admin import router as admin_router
 from app.api.v1.routes import api_router
 from app.core.config import settings
 from app.core.errors import install_exception_handlers
@@ -67,9 +67,8 @@ app.include_router(admin_router)
 # Ensure media directory exists before mounting
 media_dir = Path(settings.MEDIA_STORAGE_DIR)
 media_dir.mkdir(parents=True, exist_ok=True)
-(media_dir / "videos").mkdir(exist_ok=True)
-(media_dir / "clips").mkdir(exist_ok=True)
-(media_dir / "tmp").mkdir(exist_ok=True)
+for subdir in ("videos", "clips", "uploads/assets", "tmp"):
+    (media_dir / subdir).mkdir(parents=True, exist_ok=True)
 
 app.mount("/media", StaticFiles(directory=settings.MEDIA_STORAGE_DIR), name="media")
 

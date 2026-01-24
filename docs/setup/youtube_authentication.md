@@ -1,6 +1,7 @@
 # YouTube Authentication Guide
 
 > **TL;DR**: YouTube OAuth (for uploading) and cookies (for downloading) are separate systems. You need both.
+> Legacy note: the FastAPI backend no longer performs YouTube downloads; this guide is retained for historical context only.
 
 ## Two Separate Authentication Systems
 

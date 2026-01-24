@@ -10,7 +10,6 @@ from app.repositories.clips import ClipRepository
 from app.repositories.publish_jobs import PublishJobRepository
 from app.repositories.users import UserRepository
 from app.repositories.videos import VideoRepository
-from app.repositories.youtube_credentials import YouTubeCredentialRepository
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:
@@ -34,9 +33,3 @@ async def get_publish_job_repository(
     session: AsyncSession = Depends(get_session),
 ) -> PublishJobRepository:
     return PublishJobRepository(session)
-
-
-async def get_youtube_credential_repository(
-    session: AsyncSession = Depends(get_session),
-) -> YouTubeCredentialRepository:
-    return YouTubeCredentialRepository(session)
