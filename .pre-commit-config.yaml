@@ -1,14 +1,23 @@
 default_install_hook_types: [pre-commit]
 default_stages: [pre-commit]
+fail_fast: true
 
 repos:
   - repo: local
     hooks:
+      - id: make-ci-checks-pre-commit
+        name: make fmt/lint/type/sec (pre-commit)
+        entry: bash -ec 'make fmt && make lint && make type && make sec'
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+        files: ^(src/|tests/|pyproject\.toml$|Makefile$|\.pre-commit-config\.yaml$)
       - id: pytest-coverage
         name: pytest with coverage
         entry: .venv/bin/python
         language: system
         pass_filenames: false
+        files: ^(src/|tests/|pyproject\.toml$|Makefile$|\.pre-commit-config\.yaml$)
         args:
           - "-m"
           - pytest
@@ -16,10 +25,3 @@ repos:
           - "--cov=tests"
           - "--cov-report=term-missing"
           - "--cov-fail-under=85"
-      - id: make-ci-checks-pre-commit
-        name: make fmt/lint/type/sec (pre-commit)
-        entry: bash -ec 'make fmt && make lint && make type && make sec'
-        language: system
-        pass_filenames: false
-        stages: [pre-commit]
-        always_run: true

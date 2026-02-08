@@ -13,6 +13,7 @@ Control-plane service for authentication, user management, clip metadata, and pu
 
 ## Requirements
 - Docker + Compose, or Python 3.12 with access to Postgres.
+- Sibling `../tv7-core` checkout is expected for shared docs/contracts symlinks (including `openapi.json`).
 - No Redis/ffmpeg/node dependencies required after the cleanup.
 
 ## Admin UI
