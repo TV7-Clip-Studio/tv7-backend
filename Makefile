@@ -66,6 +66,7 @@ deps:
 	@$(PIP) -q install --upgrade pip
 	@$(PIP) -q install -e ".[dev]"
 	@$(VENV)/bin/pre-commit install
+	@$(VENV)/bin/pre-commit install --hook-type pre-push
 
 core-init:
 	@if [ -d "$(CORE_DIR)/.git" ]; then echo "tv7-core already present at $(CORE_DIR)"; exit 0; fi
