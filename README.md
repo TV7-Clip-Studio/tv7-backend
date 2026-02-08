@@ -2,6 +2,10 @@
 
 Control-plane service for authentication, user management, clip metadata, and publish scheduling. Media processing now lives in the desktop app + engine; this backend no longer downloads, transcribes, or renders videos.
 
+## Shared Docs & Contracts
+- Repo docs are centralized in core under `docs/core/repos/tv7-fastapi-backend/`.
+- Canonical API contract is maintained at `docs/core/contracts/openapi/tv7-fastapi-backend/openapi.json`.
+
 ## Quickstart (Docker)
 - Copy `.env.example` to `.env` and adjust database credentials if needed.
 - Start API and Postgres: `make up`
@@ -9,6 +13,7 @@ Control-plane service for authentication, user management, clip metadata, and pu
 
 ## Requirements
 - Docker + Compose, or Python 3.12 with access to Postgres.
+- Sibling `../tv7-core` checkout is expected for shared docs/contracts symlinks (including `openapi.json`).
 - No Redis/ffmpeg/node dependencies required after the cleanup.
 
 ## Admin UI

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from jose import JWTError, jwt
@@ -9,7 +9,7 @@ from jose import JWTError, jwt
 from app.core.config import settings
 
 
-class TokenType(str, Enum):
+class TokenType(StrEnum):
     ACCESS = "access"
     REFRESH = "refresh"
 

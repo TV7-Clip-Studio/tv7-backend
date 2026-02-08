@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from sqlalchemy import (
     BigInteger,
@@ -38,14 +38,14 @@ __all__ = [
 ]
 
 
-class VideoStatus(str, Enum):
+class VideoStatus(StrEnum):
     INGESTED = "ingested"
     PROCESSING = "processing"
     READY = "ready"
     ERROR = "error"
 
 
-class ClipStatus(str, Enum):
+class ClipStatus(StrEnum):
     RENDERING = "rendering"
     READY = "ready"
     PUBLISHED_PARTIAL = "published_partial"
@@ -53,17 +53,17 @@ class ClipStatus(str, Enum):
     ERROR = "error"
 
 
-class AuthProvider(str, Enum):
+class AuthProvider(StrEnum):
     EMAIL = "email"
     GOOGLE = "google"
 
 
-class ClipGenerationMode(str, Enum):
+class ClipGenerationMode(StrEnum):
     REPLACE = "replace"
     APPEND = "append"
 
 
-class VideoIngestType(str, Enum):
+class VideoIngestType(StrEnum):
     YOUTUBE = "youtube"
     UPLOAD = "upload"
 
@@ -226,7 +226,7 @@ class Clip(Base):
     video: Mapped[Video] = relationship(back_populates="clips")
 
 
-class PublishJobStatus(str, Enum):
+class PublishJobStatus(StrEnum):
     PENDING = "pending"
     QUEUED = "queued"
     PUBLISHING = "publishing"
