@@ -25,6 +25,7 @@ POSTGRES_PORT ?= 5432
 else
 POSTGRES_PORT ?= $(POSTGRES_PORT_FILE)
 endif
+DATABASE_URL_LOCAL ?= postgresql+asyncpg://postgres:postgres@localhost:$(POSTGRES_PORT)/appdb
 
 ifeq ($(COMPOSE_PROJECT_FILE),)
 COMPOSE_PROJECT_NAME ?= $(notdir $(CURDIR))
@@ -56,7 +57,7 @@ else
 endif
 
 .PHONY: deps run test testcov fmt lint type sec precommit \
-        revision upgrade downgrade migrate up down build restart logs dev smoke \
+        revision upgrade downgrade migrate up down build restart logs dev dev-local smoke \
         smoke-fly \
         test-integration \
         core-init
@@ -120,8 +121,11 @@ logs:
 	COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT_NAME) $(COMPOSE) logs -f --tail=200 api postgres
 
 dev:
-	COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT_NAME) $(COMPOSE) up -d postgres
-	$(UV) app.main:app --host 0.0.0.0 --port 8000 --reload
+	COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT_NAME) API_PORT=$(API_PORT) POSTGRES_PORT=$(POSTGRES_PORT) $(COMPOSE) up --build api postgres
+
+dev-local:
+	COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT_NAME) POSTGRES_PORT=$(POSTGRES_PORT) $(COMPOSE) up -d postgres
+	DATABASE_URL=$(DATABASE_URL_LOCAL) $(UV) app.main:app --host 0.0.0.0 --port $(API_PORT) --reload
 
 smoke:
 	curl -s http://localhost:8000/health | jq . ; \
