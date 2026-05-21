@@ -23,7 +23,8 @@ Control-plane service for authentication, user management, clip metadata, and pu
 - Users: list users and view per-user metrics (videos, clips, publish jobs).
 
 ## Development Workflow
-- Local hot-reload: `make dev` (starts Postgres via Compose, runs uvicorn locally)
+- Local hot-reload in Docker: `make dev` (runs API + Postgres in Compose)
+- Local hot-reload on host Uvicorn: `make dev-local` (starts Postgres in Compose, runs API locally with localhost DB URL)
 - Compose stack: `make up` / `make down`
 - Lint/format/type/test: `make fmt`, `make lint`, `make type`, `make test`, `make testcov`
 - Migrations: `make revision m="message"` then `make upgrade`
