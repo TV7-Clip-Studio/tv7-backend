@@ -1,10 +1,10 @@
-# TV7 FastAPI Backend
+# TV7 Backend
 
 Control-plane service for authentication, user management, clip metadata, and publish scheduling. Media processing now lives in the desktop app + engine; this backend no longer downloads, transcribes, or renders videos.
 
 ## Shared Docs & Contracts
-- Repo docs are centralized in core under `docs/core/repos/tv7-fastapi-backend/`.
-- Canonical API contract is maintained at `docs/core/contracts/openapi/tv7-fastapi-backend/openapi.json`.
+- Repo docs are centralized in core under `docs/core/repos/tv7-backend/`.
+- Canonical API contract is maintained at `docs/core/contracts/openapi/tv7-backend/openapi.json`.
 
 ## Quickstart (Docker)
 - Copy `.env.example` to `.env` and adjust database credentials if needed.
