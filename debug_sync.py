@@ -50,7 +50,17 @@ async def main() -> None:
             import time
 
             source_url = f"https://www.youtube.com/watch?v=overflow_{int(time.time())}"
-            local_path = "/Users/joaquinastelarra/Documents/TV7/flutter-tv7/forgotten_client/assets/videos/large_video.mp4"
+            local_path = os.path.abspath(
+                os.path.join(
+                    os.path.dirname(__file__),
+                    "..",
+                    "tv7-studio",
+                    "forgotten_client",
+                    "assets",
+                    "videos",
+                    "large_video.mp4",
+                )
+            )
             original_filename = "large_video.mp4"
 
             # Check if exists

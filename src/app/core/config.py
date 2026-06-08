@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import cast
+from typing import Any, cast
 
-from pydantic import AnyUrl
+from pydantic import AnyUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 HTTP_DEFAULT_PORT = 80
@@ -32,6 +32,18 @@ class Settings(BaseSettings):
     MEDIA_STORAGE_DIR: str = "./media"
     UPLOAD_MAX_FILE_SIZE_MB: int = 4096
     LOG_OUTPUT_MODE: str = "medium"
+
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def normalize_debug(cls, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip().lower()
+        if normalized in {"release", "prod", "production"}:
+            return False
+        if normalized in {"debug", "dev", "development"}:
+            return True
+        return value
 
     @property
     def backend_base_url(self) -> str:
