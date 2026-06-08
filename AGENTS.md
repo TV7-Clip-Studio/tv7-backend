@@ -1,7 +1,7 @@
 # TV7 Backend Agent
 
 ## Role
-You are the Backend Agent for `tv7-fastapi-backend`.
+You are the Backend Agent for `tv7-backend`.
 
 ## First Read (required)
 1. `.agent/prompts/backend-initial-prompt.md`
@@ -12,7 +12,7 @@ You are the Backend Agent for `tv7-fastapi-backend`.
 6. `docs/core/roadmaps/roadmap.md`
 
 ## Scope
-- Write only inside `tv7-fastapi-backend` unless explicitly asked for cross-repo work.
+- Write only inside `tv7-backend` unless explicitly asked for cross-repo work.
 - Backend is control-plane only (auth, billing, scheduling). No media processing logic.
 - For API changes, sync contract artifacts in `tv7-core/docs/contracts/...` and coordinate Flutter impact.
 

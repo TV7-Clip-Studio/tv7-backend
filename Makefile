@@ -91,13 +91,13 @@ sec:
 	$(BANDIT) -q -r src || true
 
 test:
-	$(PYTEST) -q
+	DEBUG=true $(PYTEST) -q
 
 testcov:
-	$(PYTEST) -q --cov=src --cov-report=term-missing
+	DEBUG=true $(PYTEST) -q --cov=src --cov-report=term-missing
 
 test-integration:
-	$(PYTEST) --override-ini addopts= -p no:cov -m integration tests/integration
+	DEBUG=true $(PYTEST) --override-ini addopts= -p no:cov -m integration tests/integration
 
 revision:
 	@if [ -z "$(m)" ]; then echo "Use: make revision m='message'"; exit 1; fi
