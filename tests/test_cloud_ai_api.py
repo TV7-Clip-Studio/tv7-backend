@@ -36,7 +36,12 @@ async def test_engine_cloud_ai_token_requires_credits(
     response = await async_client.post("/api/v1/cloud-ai/engine-token", headers=auth_headers)
 
     assert response.status_code == 402
-    assert response.json()["error"]["code"] == "AI_QUOTA_EXCEEDED"
+    error = response.json()["error"]
+    assert error["code"] == "AI_QUOTA_EXCEEDED"
+    assert error["details"] == {
+        "credits_required": cloud_ai_service.settings.CLOUD_AI_DEFAULT_REQUEST_CREDITS,
+        "credits_remaining": 0,
+    }
 
 
 async def test_engine_cloud_ai_token_issued_with_scope_and_balance(
@@ -160,7 +165,12 @@ async def test_cloud_ai_execute_rejects_oversized_context_and_records_failure(
     )
 
     assert response.status_code == 413
-    assert response.json()["error"]["code"] == "AI_CONTEXT_TOO_LARGE"
+    error = response.json()["error"]
+    assert error["code"] == "AI_CONTEXT_TOO_LARGE"
+    assert error["details"] == {
+        "context_chars": len("too long"),
+        "max_context_chars": 4,
+    }
 
     requests = await _cloud_ai_requests_for_user(db_session, login_credentials[0])
     assert len(requests) == 1

@@ -36,13 +36,20 @@ class CloudAiErrorCode:
 
 
 class CloudAiHTTPException(HTTPException):
-    def __init__(self, status_code: int, code: str, message: str) -> None:
+    def __init__(
+        self,
+        status_code: int,
+        code: str,
+        message: str,
+        *,
+        details: dict[str, Any] | None = None,
+    ) -> None:
         super().__init__(
             status_code=status_code,
             detail={
                 "code": code,
                 "message": message,
-                "details": {},
+                "details": details or {},
             },
         )
 
@@ -189,6 +196,10 @@ async def issue_engine_cloud_ai_token(
             status.HTTP_402_PAYMENT_REQUIRED,
             CloudAiErrorCode.QUOTA_EXCEEDED,
             "Cloud AI credits are exhausted.",
+            details={
+                "credits_required": settings.CLOUD_AI_DEFAULT_REQUEST_CREDITS,
+                "credits_remaining": readiness.cloud_ai_credits_remaining,
+            },
         )
 
     token = create_token(
@@ -259,7 +270,8 @@ async def execute_cloud_ai(
             "Cloud AI requires an active TV7 account.",
         )
 
-    if _request_context_size(payload) > settings.CLOUD_AI_CONTEXT_MAX_CHARS:
+    context_chars = _request_context_size(payload)
+    if context_chars > settings.CLOUD_AI_CONTEXT_MAX_CHARS:
         await repo.create_request(
             CloudAiRequestCreate(
                 user_id=user.id,
@@ -274,6 +286,10 @@ async def execute_cloud_ai(
             status.HTTP_413_CONTENT_TOO_LARGE,
             CloudAiErrorCode.CONTEXT_TOO_LARGE,
             "Cloud AI context is too large.",
+            details={
+                "context_chars": context_chars,
+                "max_context_chars": settings.CLOUD_AI_CONTEXT_MAX_CHARS,
+            },
         )
 
     charge = settings.CLOUD_AI_DEFAULT_REQUEST_CREDITS
@@ -284,6 +300,10 @@ async def execute_cloud_ai(
             status.HTTP_402_PAYMENT_REQUIRED,
             CloudAiErrorCode.QUOTA_EXCEEDED,
             "Cloud AI credits are exhausted.",
+            details={
+                "credits_required": charge,
+                "credits_remaining": balance,
+            },
         )
 
     adapter = provider or DeepSeekAdapter()
