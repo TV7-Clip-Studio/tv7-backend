@@ -1,0 +1,78 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<h2>Cloud AI</h2>
+<div class="card">
+  <h3>Credit Balances</h3>
+  <p class="muted">Purchased credits do not expire. Prompt bodies are not stored.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>User</th>
+        <th>Email</th>
+        <th>Credits Remaining</th>
+        <th>Grant Credits</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for user, balance in balances %}
+      <tr>
+        <td>{{ user.id }}</td>
+        <td>{{ user.email }}</td>
+        <td>{{ balance }}</td>
+        <td>
+          <form method="post" action="/admin/cloud-ai/credits" style="display:flex; gap:8px; align-items:center;">
+            <input type="hidden" name="user_id" value="{{ user.id }}">
+            <input
+              type="number"
+              name="amount"
+              min="1"
+              max="1000000000"
+              value="1000000"
+              aria-label="Credits to grant {{ user.email }}"
+              required
+            >
+            <button type="submit">Grant</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h3>Recent Requests</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>User</th>
+        <th>Provider</th>
+        <th>Model</th>
+        <th>Status</th>
+        <th>Error</th>
+        <th>Tokens</th>
+        <th>Credits</th>
+        <th>Latency</th>
+        <th>Created</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for request in recent_requests %}
+      <tr>
+        <td>{{ request.id }}</td>
+        <td>{{ request.user.email if request.user else request.user_id }}</td>
+        <td>{{ request.provider }}</td>
+        <td>{{ request.model or "" }}</td>
+        <td>{{ request.status }}</td>
+        <td>{{ request.error_code or "" }}</td>
+        <td>{{ request.total_tokens or "" }}</td>
+        <td>{{ request.credits_charged }}</td>
+        <td>{{ request.latency_ms if request.latency_ms is not none else "" }}</td>
+        <td>{{ request.created_at }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

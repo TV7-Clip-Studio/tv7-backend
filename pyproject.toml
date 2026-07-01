@@ -3,7 +3,7 @@ name = "ProtoType"
 version = "0.1.0"
 requires-python = ">=3.12.12"
 dependencies = [
-  "fastapi>=0.115",
+  "fastapi>=0.115,<0.137",
   "jinja2>=3.1",
   "python-multipart>=0.0.9",
   "starlette>=0.40.0,<0.49.0",

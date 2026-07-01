@@ -47,6 +47,34 @@ async def test_http_exception_handler() -> None:
     }
 
 
+async def test_http_exception_handler_preserves_structured_error_codes() -> None:
+    app = _build_app()
+    handler = app.exception_handlers[StarletteHTTPException]  # type: ignore[index]
+    request = Request({"type": "http"})
+
+    raw_response = handler(
+        request,
+        StarletteHTTPException(
+            status_code=402,
+            detail={
+                "code": "AI_QUOTA_EXCEEDED",
+                "message": "Cloud AI credits are exhausted.",
+                "details": {},
+            },
+        ),
+    )
+    response = await _resolve_response(raw_response)
+
+    assert response.status_code == 402
+    assert json.loads(response.body.decode()) == {
+        "error": {
+            "code": "AI_QUOTA_EXCEEDED",
+            "message": "Cloud AI credits are exhausted.",
+            "details": {},
+        }
+    }
+
+
 async def test_validation_exception_handler() -> None:
     app = _build_app()
     handler = app.exception_handlers[ValidationError]  # type: ignore[index]

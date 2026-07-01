@@ -7,7 +7,16 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.db.models import Clip, ClipStatus, PublishJob, PublishJobStatus, User, Video
+from app.db.models import (
+    Clip,
+    ClipStatus,
+    CloudAiRequestStatus,
+    PublishJob,
+    PublishJobStatus,
+    User,
+    Video,
+)
+from app.repositories.cloud_ai import CloudAiRepository, CloudAiRequestCreate
 from app.repositories.publish_jobs import PublishJobRepository
 
 pytestmark = pytest.mark.asyncio
@@ -116,3 +125,57 @@ async def test_admin_users_views(async_client: AsyncClient, db_session: AsyncSes
     assert detail_response.status_code == HTTPStatus.OK
     assert str(user.id) in detail_response.text
     assert "Videos" in detail_response.text
+
+
+async def test_admin_cloud_ai_view(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    user = User(email="cloud-admin-test@example.com", full_name="Cloud Admin", password_hash="x")
+    db_session.add(user)
+    await db_session.flush()
+
+    repo = CloudAiRepository(db_session)
+    await repo.grant_credits(user.id, 123, reason="admin_test")
+    await repo.create_request(
+        CloudAiRequestCreate(
+            user_id=user.id,
+            provider="deepseek",
+            model="deepseek-test",
+            status=CloudAiRequestStatus.SUCCEEDED,
+            total_tokens=8,
+            credits_charged=1,
+            latency_ms=0,
+        )
+    )
+    await db_session.commit()
+
+    await _login_cookie(async_client)
+    response = await async_client.get("/admin/cloud-ai")
+
+    assert response.status_code == HTTPStatus.OK
+    assert "cloud-admin-test@example.com" in response.text
+    assert "123" in response.text
+    assert "deepseek-test" in response.text
+    assert "<td>0</td>" in response.text
+
+
+async def test_admin_grants_cloud_ai_credits(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    user = User(email="credit-grant@example.com", full_name="Credit Grant", password_hash="x")
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    await _login_cookie(async_client)
+    response = await async_client.post(
+        "/admin/cloud-ai/credits",
+        data={"user_id": user.id, "amount": 1_000_000},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == HTTPStatus.SEE_OTHER
+    assert response.headers["location"] == "/admin/cloud-ai"
+    assert await CloudAiRepository(db_session).get_credit_balance(user.id) == 1_000_000
