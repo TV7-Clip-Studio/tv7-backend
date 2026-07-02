@@ -8,14 +8,15 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, 
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from jose import JWTError, jwt
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
-from app.db.models import Clip, PublishJob, PublishJobStatus, User, Video
+from app.db.models import Clip, CloudAiRequest, PublishJob, PublishJobStatus, User, Video
 from app.deps.db import get_session
+from app.repositories.cloud_ai import CloudAiRepository
 from app.repositories.publish_jobs import PublishJobRepository
 from app.repositories.users import UserRepository
 
@@ -46,6 +47,19 @@ class ScheduleEntryUpdateForm(BaseModel):
             response_payload=response_payload,
             error_message=error_message,
         )
+
+
+class CloudAiCreditGrantForm(BaseModel):
+    user_id: int = Field(gt=0)
+    amount: int = Field(gt=0, le=1_000_000_000)
+
+    @classmethod
+    def as_form(
+        cls,
+        user_id: int = Form(...),
+        amount: int = Form(...),
+    ) -> CloudAiCreditGrantForm:
+        return cls(user_id=user_id, amount=amount)
 
 
 def _cookie_settings() -> dict[str, Any]:
@@ -174,6 +188,9 @@ async def dashboard(request: Request, session: AsyncSession = Depends(get_sessio
     counts["videos"] = await session.scalar(select(func.count()).select_from(Video)) or 0
     counts["clips"] = await session.scalar(select(func.count()).select_from(Clip)) or 0
     counts["publish_jobs"] = await session.scalar(select(func.count()).select_from(PublishJob)) or 0
+    counts["cloud_ai_requests"] = (
+        await session.scalar(select(func.count()).select_from(CloudAiRequest)) or 0
+    )
 
     return templates.TemplateResponse(
         request,
@@ -214,6 +231,57 @@ async def view_schedule(
             "statuses": list(PublishJobStatus),
         },
     )
+
+
+@router.get("/cloud-ai", response_class=HTMLResponse)
+async def view_cloud_ai(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    try:
+        admin_user = _require_admin(request)
+    except HTTPException:
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    repo = CloudAiRepository(session)
+    balances = await repo.list_user_balances()
+    recent_requests = await repo.list_recent_requests(limit=100)
+
+    return templates.TemplateResponse(
+        request,
+        "admin/cloud_ai.html",
+        {
+            "request": request,
+            "admin_user": admin_user,
+            "balances": balances,
+            "recent_requests": recent_requests,
+        },
+    )
+
+
+@router.post("/cloud-ai/credits", response_class=HTMLResponse)
+async def grant_cloud_ai_credits(
+    request: Request,
+    form: CloudAiCreditGrantForm = Depends(CloudAiCreditGrantForm.as_form),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    try:
+        admin_user = _require_admin(request)
+    except HTTPException:
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    user = await session.get(User, form.user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    repo = CloudAiRepository(session)
+    await repo.grant_credits(
+        user.id,
+        form.amount,
+        reason=f"admin_grant:{admin_user}",
+    )
+    await repo.commit()
+    return RedirectResponse(url="/admin/cloud-ai", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.post("/schedule/{job_id}", response_class=HTMLResponse)

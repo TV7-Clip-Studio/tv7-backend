@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRES_MINUTES: int = 30
     JWT_REFRESH_TOKEN_EXPIRES_MINUTES: int = 60 * 24 * 7  # one week
+    ENGINE_CLOUD_AI_TOKEN_EXPIRES_MINUTES: int = 15
+    CLOUD_AI_DEFAULT_REQUEST_CREDITS: int = 1
+    CLOUD_AI_CONTEXT_MAX_CHARS: int = 120_000
+    CLOUD_AI_PROVIDER: str = "deepseek"
+    DEEPSEEK_API_KEY: str | None = None
+    DEEPSEEK_API_URL: str = "https://api.deepseek.com/chat/completions"
+    DEEPSEEK_MODEL: str = "deepseek-chat"
+    ADMIN_CLOUD_AI_INITIAL_CREDITS: int = 1_000_000_000
     MEDIA_STORAGE_DIR: str = "./media"
     UPLOAD_MAX_FILE_SIZE_MB: int = 4096
     LOG_OUTPUT_MODE: str = "medium"

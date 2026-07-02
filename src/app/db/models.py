@@ -27,6 +27,10 @@ __all__ = [
     "UserOAuthAccount",
     "Video",
     "Clip",
+    "CloudAiCreditTransaction",
+    "CloudAiCreditTransactionKind",
+    "CloudAiRequest",
+    "CloudAiRequestStatus",
     "PublishJob",
     "PublishJobStatus",
     "YouTubeCredential",
@@ -66,6 +70,17 @@ class ClipGenerationMode(StrEnum):
 class VideoIngestType(StrEnum):
     YOUTUBE = "youtube"
     UPLOAD = "upload"
+
+
+class CloudAiCreditTransactionKind(StrEnum):
+    GRANT = "grant"
+    USAGE = "usage"
+    ADJUSTMENT = "adjustment"
+
+
+class CloudAiRequestStatus(StrEnum):
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
 
 
 class UserOAuthAccount(Base):
@@ -127,6 +142,82 @@ class User(Base):
         back_populates="user",
         uselist=False,
         cascade="all, delete-orphan",
+    )
+    cloud_ai_credit_transactions: Mapped[list[CloudAiCreditTransaction]] = relationship(
+        "CloudAiCreditTransaction",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    cloud_ai_requests: Mapped[list[CloudAiRequest]] = relationship(
+        "CloudAiRequest",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+
+class CloudAiCreditTransaction(Base):
+    __tablename__ = "cloud_ai_credit_transactions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    request_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("cloud_ai_requests.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    user: Mapped[User] = relationship(
+        "User",
+        back_populates="cloud_ai_credit_transactions",
+        foreign_keys=[user_id],
+    )
+    request: Mapped[CloudAiRequest | None] = relationship(
+        "CloudAiRequest",
+        back_populates="credit_transactions",
+        foreign_keys=[request_id],
+    )
+
+
+class CloudAiRequest(Base):
+    __tablename__ = "cloud_ai_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    prompt_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    completion_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    credits_charged: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    user: Mapped[User] = relationship("User", back_populates="cloud_ai_requests")
+    credit_transactions: Mapped[list[CloudAiCreditTransaction]] = relationship(
+        "CloudAiCreditTransaction",
+        back_populates="request",
+        foreign_keys=[CloudAiCreditTransaction.request_id],
     )
 
 

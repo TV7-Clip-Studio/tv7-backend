@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 
 from app.deps.security import require_jwt_user
 
-from . import auth, clips, config, publish, uploads, users, videos
+from . import auth, clips, cloud_ai, config, publish, uploads, users, videos
 
 api_router = APIRouter()
 
@@ -39,4 +39,9 @@ api_router.include_router(
     uploads.router,
     tags=["uploads"],
     prefix="/uploads",
+)
+api_router.include_router(
+    cloud_ai.router,
+    tags=["cloud-ai"],
+    prefix="/cloud-ai",
 )

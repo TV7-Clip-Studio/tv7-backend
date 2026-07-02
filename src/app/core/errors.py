@@ -11,6 +11,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 def install_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(StarletteHTTPException)
     async def http_exc_handler(_: Request, exc: StarletteHTTPException) -> JSONResponse:
+        if isinstance(exc.detail, dict) and {"code", "message"}.issubset(exc.detail):
+            return JSONResponse(
+                {"error": exc.detail},
+                status_code=exc.status_code,
+            )
         return JSONResponse(
             {"error": {"code": exc.status_code, "message": exc.detail}},
             status_code=exc.status_code,

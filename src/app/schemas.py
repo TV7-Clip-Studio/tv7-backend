@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -56,6 +56,80 @@ class TokenPayload(BaseModel):
 
 class TokenRefreshRequest(BaseModel):
     refresh_token: str
+
+
+class LicenseReadinessResponse(BaseModel):
+    account_active: bool = Field(description="Whether the authenticated TV7 account is active.")
+    license_status: Literal["active", "required"] = Field(
+        description="Account-level cloud AI entitlement readiness."
+    )
+    cloud_ai_available: bool = Field(
+        description="Whether TV7 cloud AI is currently available to this account."
+    )
+    cloud_ai_credits_remaining: int = Field(
+        ge=0,
+        description="Perpetual cloud AI credits remaining; purchased credits do not expire.",
+    )
+    can_request_engine_cloud_ai_token: bool = Field(
+        description="Whether Studio may request a short-lived delegated Engine token."
+    )
+    engine_cloud_ai_scope: str = Field(
+        default="engine:cloud_ai",
+        description="Required scope for delegated Engine cloud AI execution.",
+    )
+    reason_code: Literal["READY", "AI_LICENSE_REQUIRED", "AI_QUOTA_EXCEEDED"] = Field(
+        description="Stable readiness reason for Studio diagnostics and account UX."
+    )
+
+
+class EngineCloudAiTokenResponse(BaseModel):
+    token: str
+    token_type: str = "bearer"
+    scope: str = "engine:cloud_ai"
+    expires_in_seconds: int
+    credits_remaining: int
+
+
+class CloudAiMessage(BaseModel):
+    role: Literal["system", "user", "assistant"]
+    content: str
+
+
+class CloudAiExecuteRequest(BaseModel):
+    messages: list[CloudAiMessage] = Field(min_length=1)
+    model: str | None = None
+    temperature: float | None = Field(default=None, ge=0, le=2)
+    max_tokens: int | None = Field(default=None, gt=0, le=8192)
+
+
+class CloudAiUsage(BaseModel):
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    total_tokens: int | None = None
+    credits_charged: int
+    credits_remaining: int
+    latency_ms: int | None = None
+
+
+class CloudAiExecuteResponse(BaseModel):
+    provider: str
+    model: str
+    content: str
+    usage: CloudAiUsage
+    raw_finish_reason: str | None = None
+
+
+class CloudAiErrorResponse(BaseModel):
+    code: Literal[
+        "AI_AUTH_REQUIRED",
+        "AI_LICENSE_REQUIRED",
+        "AI_QUOTA_EXCEEDED",
+        "AI_PROVIDER_UNAVAILABLE",
+        "AI_NETWORK_UNAVAILABLE",
+        "AI_CONTEXT_TOO_LARGE",
+    ]
+    message: str
+    details: dict[str, Any] = Field(default_factory=dict)
 
 
 class ClipRead(BaseModel):

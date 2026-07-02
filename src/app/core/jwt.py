@@ -12,6 +12,7 @@ from app.core.config import settings
 class TokenType(StrEnum):
     ACCESS = "access"
     REFRESH = "refresh"
+    ENGINE_CLOUD_AI = "engine_cloud_ai"
 
 
 class JWTGenerationError(RuntimeError):
@@ -33,18 +34,30 @@ def _encode(payload: dict[str, Any]) -> str:
         raise JWTGenerationError("Failed to generate JWT") from exc
 
 
-def create_token(*, subject: str, token_type: TokenType) -> str:
+def create_token(
+    *,
+    subject: str,
+    token_type: TokenType,
+    scopes: list[str] | None = None,
+    expires_minutes: int | None = None,
+) -> str:
     if token_type is TokenType.ACCESS:
-        expires = _build_expiration(settings.JWT_ACCESS_TOKEN_EXPIRES_MINUTES)
+        default_expires = settings.JWT_ACCESS_TOKEN_EXPIRES_MINUTES
+    elif token_type is TokenType.REFRESH:
+        default_expires = settings.JWT_REFRESH_TOKEN_EXPIRES_MINUTES
     else:
-        expires = _build_expiration(settings.JWT_REFRESH_TOKEN_EXPIRES_MINUTES)
+        default_expires = settings.ENGINE_CLOUD_AI_TOKEN_EXPIRES_MINUTES
 
-    payload = {
+    expires = _build_expiration(expires_minutes or default_expires)
+
+    payload: dict[str, Any] = {
         "sub": subject,
         "type": token_type.value,
         "exp": expires,
         "iat": datetime.now(tz=UTC),
     }
+    if scopes:
+        payload["scopes"] = scopes
     return _encode(payload)
 
 

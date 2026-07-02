@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.base import session_scope
 from app.repositories.clips import ClipRepository
+from app.repositories.cloud_ai import CloudAiRepository
 from app.repositories.publish_jobs import PublishJobRepository
 from app.repositories.users import UserRepository
 from app.repositories.videos import VideoRepository
@@ -33,3 +34,9 @@ async def get_publish_job_repository(
     session: AsyncSession = Depends(get_session),
 ) -> PublishJobRepository:
     return PublishJobRepository(session)
+
+
+async def get_cloud_ai_repository(
+    session: AsyncSession = Depends(get_session),
+) -> CloudAiRepository:
+    return CloudAiRepository(session)
