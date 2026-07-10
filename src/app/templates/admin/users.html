@@ -9,6 +9,9 @@
         <th>ID</th>
         <th>Email</th>
         <th>Name</th>
+        <th>Account</th>
+        <th>Cloud AI</th>
+        <th>Credits</th>
         <th>Videos</th>
         <th>Clips</th>
         <th>Publish Jobs</th>
@@ -22,6 +25,23 @@
         <td>{{ row.user.id }}</td>
         <td>{{ row.user.email }}</td>
         <td>{{ row.user.full_name }}</td>
+        <td>
+          {% if row.user.is_active %}
+            <span class="status status-ready">ACTIVE</span>
+          {% else %}
+            <span class="status status-inactive">INACTIVE</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if row.cloud_ai_available %}
+            <span class="status status-ready">READY</span>
+          {% elif not row.user.is_active %}
+            <span class="status status-inactive">BLOCKED</span>
+          {% else %}
+            <span class="status status-warning">NO CREDITS</span>
+          {% endif %}
+        </td>
+        <td>{{ "{:,}".format(row.cloud_ai_credits) }}</td>
         <td>{{ row.videos }}</td>
         <td>{{ row.clips }}</td>
         <td>{{ row.publish_jobs }}</td>

@@ -120,11 +120,41 @@ async def test_admin_users_views(async_client: AsyncClient, db_session: AsyncSes
     list_response = await async_client.get("/admin/users")
     assert list_response.status_code == HTTPStatus.OK
     assert user.email in list_response.text
+    assert "ACTIVE" in list_response.text
+    assert "NO CREDITS" in list_response.text
 
     detail_response = await async_client.get(f"/admin/users/{user.id}")
     assert detail_response.status_code == HTTPStatus.OK
     assert str(user.id) in detail_response.text
     assert "Videos" in detail_response.text
+    assert "Account Status" in detail_response.text
+    assert "Credits Remaining" in detail_response.text
+
+
+async def test_admin_updates_user_account_status(
+    async_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    user = User(email="status@example.com", full_name="Status User", password_hash="secret")
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    await _login_cookie(async_client)
+    response = await async_client.post(
+        f"/admin/users/{user.id}/status",
+        data={"is_active": "false"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == HTTPStatus.SEE_OTHER
+    assert response.headers["location"] == f"/admin/users/{user.id}"
+    await db_session.refresh(user)
+    assert user.is_active is False
+
+    detail_response = await async_client.get(f"/admin/users/{user.id}")
+    assert detail_response.status_code == HTTPStatus.OK
+    assert "INACTIVE" in detail_response.text
+    assert "BLOCKED" in detail_response.text
 
 
 async def test_admin_cloud_ai_view(

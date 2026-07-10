@@ -19,6 +19,7 @@ from app.deps.db import get_session
 from app.repositories.cloud_ai import CloudAiRepository
 from app.repositories.publish_jobs import PublishJobRepository
 from app.repositories.users import UserRepository
+from app.services.cloud_ai import get_cloud_ai_license_readiness
 
 SESSION_COOKIE = "admin_session"
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
@@ -327,6 +328,9 @@ async def list_users(
         return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
     user_repo = UserRepository(session)
     users = await user_repo.list_users()
+    cloud_ai_balances = {
+        user.id: balance for user, balance in await CloudAiRepository(session).list_user_balances()
+    }
 
     video_counts = {
         row[0]: row[1]
@@ -370,6 +374,8 @@ async def list_users(
                 "videos": video_counts.get(user.id, 0),
                 "clips": clip_counts.get(user.id, 0),
                 "publish_jobs": publish_counts.get(user.id, 0),
+                "cloud_ai_credits": cloud_ai_balances.get(user.id, 0),
+                "cloud_ai_available": user.is_active and cloud_ai_balances.get(user.id, 0) > 0,
             }
         )
 
@@ -425,6 +431,10 @@ async def user_detail(
         .limit(10)
     )
     recent_videos = (await session.execute(stmt)).scalars().unique().all()
+    cloud_ai_readiness = await get_cloud_ai_license_readiness(
+        user,
+        CloudAiRepository(session),
+    )
 
     return templates.TemplateResponse(
         request,
@@ -439,5 +449,32 @@ async def user_detail(
                 "publish_jobs": publish_count or 0,
             },
             "videos": recent_videos,
+            "cloud_ai_readiness": cloud_ai_readiness,
         },
+    )
+
+
+@router.post("/users/{user_id}/status", response_class=HTMLResponse)
+async def update_user_account_status(
+    user_id: int,
+    request: Request,
+    is_active: bool = Form(...),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    try:
+        _require_admin(request)
+    except HTTPException:
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    user_repo = UserRepository(session)
+    user = await user_repo.get_by_id(user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    user.is_active = is_active
+    await user_repo.update(user)
+    await session.commit()
+    return RedirectResponse(
+        url=f"/admin/users/{user_id}",
+        status_code=status.HTTP_303_SEE_OTHER,
     )

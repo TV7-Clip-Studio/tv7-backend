@@ -8,6 +8,47 @@
 </div>
 
 <div class="card">
+  <h3>Account &amp; Cloud AI</h3>
+  <table>
+    <tbody>
+      <tr>
+        <th>Account Status</th>
+        <td>
+          {% if cloud_ai_readiness.account_active %}
+            <span class="status status-ready">ACTIVE</span>
+          {% else %}
+            <span class="status status-inactive">INACTIVE</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <th>Cloud AI Status</th>
+        <td>
+          {% if cloud_ai_readiness.cloud_ai_available %}
+            <span class="status status-ready">READY</span>
+          {% elif not cloud_ai_readiness.account_active %}
+            <span class="status status-inactive">BLOCKED</span>
+          {% else %}
+            <span class="status status-warning">NO CREDITS</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <th>Credits Remaining</th>
+        <td>{{ "{:,}".format(cloud_ai_readiness.cloud_ai_credits_remaining) }}</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="actions" style="margin-top:16px;">
+    <form method="post" action="/admin/users/{{ user.id }}/status">
+      <input type="hidden" name="is_active" value="{{ 'false' if user.is_active else 'true' }}">
+      <button type="submit">{{ 'Deactivate Account' if user.is_active else 'Activate Account' }}</button>
+    </form>
+    <a href="/admin/cloud-ai">Manage Cloud AI Credits</a>
+  </div>
+</div>
+
+<div class="card">
   <h3>Usage</h3>
   <div style="display:flex; gap:12px; flex-wrap:wrap;">
     <div class="card" style="flex:1; min-width:120px;">
