@@ -27,7 +27,8 @@ def upgrade() -> None:
     op.execute(
         "UPDATE videos SET clip_generation_mode = 'replace' WHERE clip_generation_mode IS NULL"
     )
-    op.alter_column("videos", "clip_generation_mode", server_default="replace")
+    with op.batch_alter_table("videos") as batch:
+        batch.alter_column("clip_generation_mode", server_default="replace")
 
 
 def downgrade() -> None:

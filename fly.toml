@@ -1,10 +1,17 @@
 app = "forgotten-app"
 primary_region = "gru"
 
+[env]
+  APP_ENV = "production"
+  ASSET_STORAGE_BACKEND = "s3"
+
 
 [processes]
   app = "/start.sh"
-  worker = "python -m scripts.run_worker"
+  worker = "python -m scripts.run_schedule_worker"
+
+[deploy]
+  release_command = "alembic upgrade head"
 
 [http_service]
   processes = ["app"]

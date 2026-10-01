@@ -81,14 +81,14 @@ async def test_admin_updates_publish_job(
         },
         follow_redirects=False,
     )
-    assert response.status_code == HTTPStatus.SEE_OTHER
+    assert response.status_code == HTTPStatus.BAD_REQUEST
 
     updated: PublishJob | None = await db_session.get(PublishJob, job.id)
     assert updated is not None
     await db_session.refresh(updated)
-    assert updated.status == PublishJobStatus.COMPLETE.value
-    assert updated.asset_url == "https://cdn.example.com/clip.mp4"
-    assert updated.response_payload == "ok"
+    assert updated.status == PublishJobStatus.PENDING.value
+    assert updated.asset_url is None
+    assert updated.response_payload is None
 
 
 async def test_admin_users_views(async_client: AsyncClient, db_session: AsyncSession) -> None:

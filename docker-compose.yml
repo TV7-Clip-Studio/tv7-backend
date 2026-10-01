@@ -1,4 +1,18 @@
 services:
+  migrate:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@postgres:5432/appdb}
+      PYTHONPATH: src
+    command: alembic upgrade head
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src
+      - ./alembic:/app/alembic
+
   api:
     build: .
     env_file: .env
@@ -8,12 +22,30 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --app-dir src --reload
     ports:
       - "${API_PORT:-8000}:8000"
-    depends_on: [postgres]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - ./src:/app/src
       - ./scripts:/app/scripts
       - ./alembic:/app/alembic
-      - ./media:/app/media
+      - ./private_media:/app/private_media
+
+  worker:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@postgres:5432/appdb}
+      PYTHONPATH: src
+    command: python -m scripts.run_schedule_worker
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - ./src:/app/src
+      - ./scripts:/app/scripts
+      - ./alembic:/app/alembic
+      - ./private_media:/app/private_media
 
   postgres:
     image: postgres:16
@@ -23,6 +55,11 @@ services:
       POSTGRES_DB: appdb
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d appdb"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
     volumes:
       - pgdata:/var/lib/postgresql/data
 

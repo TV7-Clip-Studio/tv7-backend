@@ -47,5 +47,19 @@ class PublishJobRepository:
         )
         return list(result.scalars().all())
 
+    async def list_for_clip_and_user(self, clip_id: int, user_id: int) -> list[PublishJob]:
+        result = await self._session.execute(
+            select(PublishJob).where(PublishJob.clip_id == clip_id, PublishJob.user_id == user_id)
+        )
+        return list(result.scalars().all())
+
+    async def get_by_idempotency_key(self, user_id: int, key: str) -> PublishJob | None:
+        result = await self._session.execute(
+            select(PublishJob).where(
+                PublishJob.user_id == user_id, PublishJob.idempotency_key == key
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def commit(self) -> None:
         await self._session.commit()

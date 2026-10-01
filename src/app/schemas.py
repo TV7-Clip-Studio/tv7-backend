@@ -135,8 +135,8 @@ class CloudAiErrorResponse(BaseModel):
 class ClipRead(BaseModel):
     id: int
     video_id: int
-    start_sec: int
-    end_sec: int
+    start_sec: float
+    end_sec: float
     local_path: str | None
     asset_url: str | None = None
     asset_checksum: str | None = None
@@ -163,6 +163,7 @@ class VideoRead(BaseModel):
     original_filename: str | None = None
     upload_checksum: str | None = None
     upload_file_size_bytes: int | None = None
+    source_media_url: str | None = None
     transcript_text: str | None
     transcript_language: str | None = None
     duration_seconds: int | None = None
@@ -183,6 +184,18 @@ class PublishJobRead(BaseModel):
     id: int
     clip_id: int
     platform: str
+    user_id: int | None = None
+    asset_id: int | None = None
+    scheduled_at: datetime | None = None
+    target_account_ref: str | None = None
+    caption: str | None = None
+    idempotency_key: str | None = None
+    attempt_count: int = 0
+    next_attempt_at: datetime | None = None
+    lease_expires_at: datetime | None = None
+    last_error_code: str | None = None
+    remote_post_id: str | None = None
+    published_at: datetime | None = None
     status: PublishJobStatus
     asset_url: str | None = None
     asset_checksum: str | None = None
@@ -202,8 +215,18 @@ class PublishRequest(BaseModel):
     asset_size_bytes: int | None = None
 
 
+class ScheduleDraftRequest(BaseModel):
+    platform: Literal["youtube_shorts", "tiktok", "instagram"]
+    target_account_ref: str = Field(min_length=1, max_length=255)
+    scheduled_at: datetime
+    caption: str = Field(default="", max_length=5000)
+    asset_id: int
+    idempotency_key: str = Field(min_length=8, max_length=128)
+
+
 class ConfigRead(BaseModel):
     publishing_enabled: bool
+    scheduling_enabled: bool = False
     asset_upload_required: bool
     allowed_platforms: list[str]
     max_asset_size_bytes: int | None = None
@@ -212,6 +235,7 @@ class ConfigRead(BaseModel):
 
 
 class AssetUploadResponse(BaseModel):
+    asset_id: int
     asset_url: str
     asset_checksum: str
     asset_size_bytes: int

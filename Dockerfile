@@ -18,9 +18,6 @@ RUN pip install --upgrade pip && pip install -e ".[dev]"
 # bring the rest (alembic, config, etc.)
 COPY . .
 
-# Create media directory structure
-RUN mkdir -p /app/media/videos /app/media/clips
-
 COPY docker/entrypoint.sh /entrypoint.sh
 COPY docker/start.sh /start.sh
 RUN chmod +x /entrypoint.sh /start.sh

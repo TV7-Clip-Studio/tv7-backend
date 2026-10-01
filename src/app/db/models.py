@@ -32,8 +32,10 @@ __all__ = [
     "CloudAiRequest",
     "CloudAiRequestStatus",
     "PublishJob",
+    "UploadedAsset",
     "PublishJobStatus",
     "YouTubeCredential",
+    "YouTubeOAuthState",
     "VideoStatus",
     "ClipStatus",
     "AuthProvider",
@@ -286,8 +288,8 @@ class Clip(Base):
         nullable=False,
         index=True,
     )
-    start_sec: Mapped[int] = mapped_column(Integer, nullable=False)
-    end_sec: Mapped[int] = mapped_column(Integer, nullable=False)
+    start_sec: Mapped[float] = mapped_column(Float, nullable=False)
+    end_sec: Mapped[float] = mapped_column(Float, nullable=False)
     local_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     asset_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     asset_checksum: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -324,10 +326,14 @@ class PublishJobStatus(StrEnum):
     PARTIAL = "partial"
     COMPLETE = "complete"
     FAILED = "failed"
+    RECONCILE = "reconcile"
 
 
 class PublishJob(Base):
     __tablename__ = "publish_jobs"
+    __table_args__ = (
+        UniqueConstraint("user_id", "idempotency_key", name="uq_publish_jobs_user_idempotency"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     clip_id: Mapped[int] = mapped_column(
@@ -337,6 +343,32 @@ class PublishJob(Base):
         index=True,
     )
     platform: Mapped[str] = mapped_column(String(64), nullable=False)
+    user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    asset_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("uploaded_assets.id", ondelete="SET NULL"), nullable=True
+    )
+    scheduled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    target_account_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    caption: Mapped[str | None] = mapped_column(Text, nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    attempt_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0", default=0
+    )
+    next_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    lease_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    remote_post_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    provider_upload_uri_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
@@ -358,6 +390,25 @@ class PublishJob(Base):
     clip: Mapped[Clip] = relationship("Clip")
 
 
+class UploadedAsset(Base):
+    __tablename__ = "uploaded_assets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    storage_path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    storage_backend: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="local", server_default="local"
+    )
+    checksum: Mapped[str] = mapped_column(String(128), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    content_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class YouTubeCredential(Base):
     __tablename__ = "youtube_credentials"
 
@@ -370,6 +421,11 @@ class YouTubeCredential(Base):
     )
     access_token: Mapped[str] = mapped_column(String(2048), nullable=False)
     refresh_token: Mapped[str] = mapped_column(String(2048), nullable=False)
+    token_encryption_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
+    channel_id: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True)
+    channel_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     token_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     scope: Mapped[str | None] = mapped_column(String(512), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -381,3 +437,15 @@ class YouTubeCredential(Base):
     )
 
     user: Mapped[User] = relationship(back_populates="youtube_credential")
+
+
+class YouTubeOAuthState(Base):
+    __tablename__ = "youtube_oauth_states"
+
+    state_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    code_verifier_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

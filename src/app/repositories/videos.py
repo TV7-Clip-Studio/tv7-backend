@@ -22,6 +22,15 @@ class VideoRepository:
         video: Video | None = result.scalar_one_or_none()
         return video
 
+    async def get_by_source_url_for_user(self, source_url: str, user_id: int) -> Video | None:
+        result = await self._session.execute(
+            select(Video).where(
+                Video.source_url == source_url,
+                Video.requested_by_user_id == user_id,
+            )
+        )
+        return result.scalars().first()
+
     async def add(self, video: Video) -> None:
         self._session.add(video)
 
@@ -36,15 +45,21 @@ class VideoRepository:
         await self._session.refresh(video)
         return video
 
-    async def get_with_clips(self, video_id: int) -> Video | None:
+    async def get_with_clips(self, video_id: int, *, user_id: int | None = None) -> Video | None:
         """Fetch a single video with clips eagerly loaded."""
         stmt = select(Video).options(selectinload(Video.clips)).where(Video.id == video_id)
+        if user_id is not None:
+            stmt = stmt.where(Video.requested_by_user_id == user_id)
         result = await self._session.execute(stmt)
         video: Video | None = result.scalar_one_or_none()
         return video
 
-    async def list_with_clips(self, *, limit: int | None = None) -> list[Video]:
+    async def list_with_clips(
+        self, *, limit: int | None = None, user_id: int | None = None
+    ) -> list[Video]:
         stmt = select(Video).options(selectinload(Video.clips)).order_by(Video.created_at.desc())
+        if user_id is not None:
+            stmt = stmt.where(Video.requested_by_user_id == user_id)
         if limit is not None:
             stmt = stmt.limit(limit)
 

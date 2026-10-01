@@ -3,11 +3,9 @@ from __future__ import annotations
 import importlib.metadata as importlib_metadata
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
@@ -18,12 +16,14 @@ from app.core.errors import install_exception_handlers
 from app.core.logging import setup_logging
 from app.core.security import SecurityHeadersMiddleware
 from app.db.base import get_engine
+from app.services.asset_storage import validate_storage_configuration
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: ARG001
     # ---- Startup ----
     setup_logging()
+    validate_storage_configuration()
     engine = get_engine()  # touch engine to validate URL early
 
     yield
@@ -62,15 +62,6 @@ install_exception_handlers(app)
 # API
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(admin_router)
-
-# Static files for media (videos, clips)
-# Ensure media directory exists before mounting
-media_dir = Path(settings.MEDIA_STORAGE_DIR)
-media_dir.mkdir(parents=True, exist_ok=True)
-for subdir in ("videos", "clips", "uploads/assets", "tmp"):
-    (media_dir / subdir).mkdir(parents=True, exist_ok=True)
-
-app.mount("/media", StaticFiles(directory=settings.MEDIA_STORAGE_DIR), name="media")
 
 
 # Utility endpoints

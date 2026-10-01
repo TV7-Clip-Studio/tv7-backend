@@ -25,7 +25,8 @@ def upgrade() -> None:
         ),
     )
     op.execute("UPDATE users SET primary_auth_provider='email'")
-    op.alter_column("users", "password_hash", existing_type=sa.String(length=255), nullable=True)
+    with op.batch_alter_table("users") as batch:
+        batch.alter_column("password_hash", existing_type=sa.String(length=255), nullable=True)
 
     op.create_table(
         "user_oauth_accounts",
@@ -71,5 +72,6 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_user_oauth_accounts_provider"), table_name="user_oauth_accounts")
     op.drop_index(op.f("ix_user_oauth_accounts_user_id"), table_name="user_oauth_accounts")
     op.drop_table("user_oauth_accounts")
-    op.alter_column("users", "password_hash", existing_type=sa.String(length=255), nullable=False)
+    with op.batch_alter_table("users") as batch:
+        batch.alter_column("password_hash", existing_type=sa.String(length=255), nullable=False)
     op.drop_column("users", "primary_auth_provider")

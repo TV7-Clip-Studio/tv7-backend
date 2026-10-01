@@ -15,15 +15,9 @@ youtube_cookies.txt
 youtube_cookies_b64.txt
 *_cookies.txt
 
-# Media files (keep folder structure, exclude contents)
-media/*
-!media/.gitkeep
-!media/videos/
-media/videos/*
-!media/videos/.gitkeep
-!media/clips/
-media/clips/*
-!media/clips/.gitkeep
+# Legacy local media is no longer part of the backend image or repository.
+media/
+private_media/
 
 # Packaging artifacts
 *.egg-info/

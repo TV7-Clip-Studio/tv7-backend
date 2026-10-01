@@ -30,22 +30,16 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 class ScheduleEntryUpdateForm(BaseModel):
     status_value: str
-    asset_url: str | None = None
-    response_payload: str | None = None
     error_message: str | None = None
 
     @classmethod
     def as_form(
         cls,
         status_value: str = Form(...),
-        asset_url: str | None = Form(None),
-        response_payload: str | None = Form(None),
         error_message: str | None = Form(None),
     ) -> ScheduleEntryUpdateForm:
         return cls(
             status_value=status_value,
-            asset_url=asset_url,
-            response_payload=response_payload,
             error_message=error_message,
         )
 
@@ -229,7 +223,7 @@ async def view_schedule(
             "request": request,
             "admin_user": admin_user,
             "jobs": jobs,
-            "statuses": list(PublishJobStatus),
+            "statuses": [PublishJobStatus.PENDING, PublishJobStatus.FAILED],
         },
     )
 
@@ -308,9 +302,13 @@ async def update_schedule_entry(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status"
         ) from None
 
+    if new_status not in {PublishJobStatus.PENDING, PublishJobStatus.FAILED}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Publishing outcomes are set only by platform adapters",
+        )
+
     job.status = new_status.value
-    job.asset_url = form.asset_url or job.asset_url
-    job.response_payload = form.response_payload
     job.error_message = form.error_message
     await repo.commit()
 

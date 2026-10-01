@@ -13,6 +13,7 @@ class TokenType(StrEnum):
     ACCESS = "access"
     REFRESH = "refresh"
     ENGINE_CLOUD_AI = "engine_cloud_ai"
+    VIDEO_SOURCE = "video_source"
 
 
 class JWTGenerationError(RuntimeError):

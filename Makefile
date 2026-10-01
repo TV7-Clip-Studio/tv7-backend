@@ -56,7 +56,7 @@ else
   -include Makefile.core
 endif
 
-.PHONY: deps run test testcov fmt lint type sec precommit \
+.PHONY: deps run worker test testcov fmt lint type sec precommit \
         revision upgrade downgrade migrate up down build restart logs dev dev-local smoke \
         smoke-fly \
         test-integration \
@@ -75,6 +75,9 @@ core-init:
 
 run: deps
 	$(UV) PYTHONPATH=src app.main:app --host 0.0.0.0 --port 8000 --reload
+
+worker:
+	PYTHONPATH=src $(PY) -m scripts.run_schedule_worker
 
 fmt:
 	$(BLACK) src tests
@@ -129,8 +132,7 @@ dev-local:
 
 smoke:
 	curl -s http://localhost:8000/health | jq . ; \
-	curl -s http://localhost:8000/metrics | head -n 5 ; \
-	PYTHONPATH=src $(PY) scripts/cleanup_media.py
+	curl -s http://localhost:8000/metrics | head -n 5
 
 smoke-fly:
 	@echo "Checking Fly health endpoint for $(FLY_APP)" ; \

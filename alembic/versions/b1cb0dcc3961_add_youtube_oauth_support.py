@@ -28,14 +28,14 @@ def upgrade() -> None:
             "videos",
             sa.Column("requested_by_user_id", sa.Integer(), nullable=True),
         )
-        op.create_foreign_key(
-            "fk_videos_requested_by_user_id",
-            "videos",
-            "users",
-            ["requested_by_user_id"],
-            ["id"],
-            ondelete="SET NULL",
-        )
+        with op.batch_alter_table("videos") as batch:
+            batch.create_foreign_key(
+                "fk_videos_requested_by_user_id",
+                "users",
+                ["requested_by_user_id"],
+                ["id"],
+                ondelete="SET NULL",
+            )
         op.create_index("ix_videos_requested_by_user_id", "videos", ["requested_by_user_id"])
 
     # Check if youtube_credentials table exists
@@ -75,5 +75,6 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_table("youtube_credentials")
     op.drop_index("ix_videos_requested_by_user_id", table_name="videos")
-    op.drop_constraint("fk_videos_requested_by_user_id", "videos", type_="foreignkey")
+    with op.batch_alter_table("videos") as batch:
+        batch.drop_constraint("fk_videos_requested_by_user_id", type_="foreignkey")
     op.drop_column("videos", "requested_by_user_id")

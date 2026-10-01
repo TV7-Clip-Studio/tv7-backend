@@ -58,3 +58,16 @@ async def test_security_headers_present(async_client: AsyncClient) -> None:
     assert headers["X-Frame-Options"] == "DENY"
     assert headers["Referrer-Policy"] == "no-referrer"
     assert headers["Permissions-Policy"] == "geolocation=(), microphone=(), camera=()"
+
+
+async def test_studio_web_login_preflight(async_client: AsyncClient) -> None:
+    response = await async_client.options(
+        "/api/v1/auth/login",
+        headers={
+            "Origin": "http://localhost:8080",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+    assert response.status_code == HTTPStatus.OK
+    assert response.headers["Access-Control-Allow-Origin"] == "http://localhost:8080"

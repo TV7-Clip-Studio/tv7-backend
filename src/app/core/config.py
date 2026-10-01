@@ -15,7 +15,16 @@ class Settings(BaseSettings):
     APP_ENV: str = "dev"
     DEBUG: bool = True
     VERSION: str = "0.1.0"
-    CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "tauri://localhost",
+        "http://tauri.localhost",
+    ]
     TRUSTED_HOSTS: list[str] = ["*"]
     API_SCHEME: str = "http"
     API_HOST: str = "127.0.0.1"
@@ -37,7 +46,22 @@ class Settings(BaseSettings):
     DEEPSEEK_API_URL: str = "https://api.deepseek.com/chat/completions"
     DEEPSEEK_MODEL: str = "deepseek-chat"
     ADMIN_CLOUD_AI_INITIAL_CREDITS: int = 1_000_000_000
-    MEDIA_STORAGE_DIR: str = "./media"
+    SOURCE_MEDIA_STORAGE_DIR: str = "./private_media/videos"
+    SCHEDULED_ASSET_STORAGE_DIR: str = "./private_media/assets"
+    ASSET_STORAGE_BACKEND: str = "local"
+    ASSET_S3_BUCKET: str | None = None
+    ASSET_S3_REGION: str | None = None
+    ASSET_S3_ENDPOINT_URL: str | None = None
+    ASSET_S3_ACCESS_KEY_ID: str | None = None
+    ASSET_S3_SECRET_ACCESS_KEY: str | None = None
+    ASSET_S3_SESSION_TOKEN: str | None = None
+    ASSET_S3_PREFIX: str = "tv7/approved-assets"
+    YOUTUBE_CLIENT_ID: str | None = None
+    YOUTUBE_CLIENT_SECRET: str | None = None
+    YOUTUBE_REDIRECT_URI: str | None = None
+    YOUTUBE_TOKEN_ENCRYPTION_KEYS: str | None = None
+    YOUTUBE_PUBLISH_ENABLED: bool = False
+    YOUTUBE_API_AUDIT_APPROVED: bool = False
     UPLOAD_MAX_FILE_SIZE_MB: int = 4096
     LOG_OUTPUT_MODE: str = "medium"
 
