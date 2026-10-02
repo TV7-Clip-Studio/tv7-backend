@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     CLOUD_AI_PROVIDER: str = "deepseek"
     DEEPSEEK_API_KEY: str | None = None
     DEEPSEEK_API_URL: str = "https://api.deepseek.com/chat/completions"
-    DEEPSEEK_MODEL: str = "deepseek-chat"
+    DEEPSEEK_MODEL: str = "deepseek-flash"
     ADMIN_CLOUD_AI_INITIAL_CREDITS: int = 1_000_000_000
     SOURCE_MEDIA_STORAGE_DIR: str = "./private_media/videos"
     SCHEDULED_ASSET_STORAGE_DIR: str = "./private_media/assets"

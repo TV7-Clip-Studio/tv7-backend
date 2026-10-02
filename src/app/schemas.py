@@ -100,6 +100,7 @@ class CloudAiExecuteRequest(BaseModel):
     model: str | None = None
     temperature: float | None = Field(default=None, ge=0, le=2)
     max_tokens: int | None = Field(default=None, gt=0, le=8192)
+    response_format: Literal["json_object"] | None = None
 
 
 class CloudAiUsage(BaseModel):

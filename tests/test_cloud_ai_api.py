@@ -6,8 +6,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import CloudAiRequest, User
 from app.repositories.cloud_ai import CloudAiRepository
+from app.schemas import CloudAiExecuteRequest, CloudAiMessage
 from app.services import cloud_ai as cloud_ai_service
 from app.services.cloud_ai import ProviderResult
+
+
+async def test_deepseek_json_mode_is_forwarded(monkeypatch) -> None:
+    captured: dict = {}
+
+    def fake_post_completion(_self, body: dict) -> ProviderResult:
+        captured.update(body)
+        return ProviderResult("{}", "deepseek-flash", None, None, None, "stop")
+
+    monkeypatch.setattr(cloud_ai_service.settings, "DEEPSEEK_API_KEY", "test-key")
+    monkeypatch.setattr(cloud_ai_service.DeepSeekAdapter, "_post_completion", fake_post_completion)
+    await cloud_ai_service.DeepSeekAdapter().complete(
+        CloudAiExecuteRequest(
+            messages=[CloudAiMessage(role="system", content="Return JSON")],
+            response_format="json_object",
+        )
+    )
+    assert captured["response_format"] == {"type": "json_object"}
 
 
 async def _grant_credits(db_session: AsyncSession, email: str, amount: int) -> None:

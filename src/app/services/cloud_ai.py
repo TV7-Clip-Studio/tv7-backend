@@ -81,6 +81,8 @@ class DeepSeekAdapter:
             body["temperature"] = payload.temperature
         if payload.max_tokens is not None:
             body["max_tokens"] = payload.max_tokens
+        if payload.response_format == "json_object":
+            body["response_format"] = {"type": "json_object"}
 
         return await asyncio.to_thread(self._post_completion, body)
 
