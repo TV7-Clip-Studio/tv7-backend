@@ -321,6 +321,7 @@ class Clip(Base):
 
 class PublishJobStatus(StrEnum):
     PENDING = "pending"
+    CANCELLED = "cancelled"
     QUEUED = "queued"
     PUBLISHING = "publishing"
     PARTIAL = "partial"

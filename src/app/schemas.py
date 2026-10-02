@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.core.jwt import TokenType
 from app.db.models import (
@@ -207,6 +207,13 @@ class PublishJobRead(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @field_validator("scheduled_at", "next_attempt_at", "lease_expires_at", "published_at")
+    @classmethod
+    def interpret_database_timestamps_as_utc(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value
+
 
 class PublishRequest(BaseModel):
     platforms: list[str]
@@ -222,6 +229,10 @@ class ScheduleDraftRequest(BaseModel):
     caption: str = Field(default="", max_length=5000)
     asset_id: int
     idempotency_key: str = Field(min_length=8, max_length=128)
+
+
+class ScheduleRescheduleRequest(BaseModel):
+    scheduled_at: datetime
 
 
 class ConfigRead(BaseModel):
