@@ -39,6 +39,7 @@ Control-plane service for authentication, user management, clip metadata, and pu
   - `POST /api/v1/videos/{video_id}/clips` to append clip metadata
 - Assets (JWT): `POST /api/v1/uploads/assets` stores a bounded, approved rendered clip in private storage and returns an opaque owner-scoped asset URL. `GET /api/v1/uploads/assets/{id}` serves that asset to its owner, including Range requests for S3 objects.
 - Schedule drafts (JWT): `POST /api/v1/clips/{clip_id}/schedule-drafts` records a future UTC target and private asset. `POST /api/v1/clips/{clip_id}/publish` returns 503 until real connected-platform adapters exist; the worker never simulates a successful post.
+- Schedule status (JWT): `GET /api/v1/schedule-jobs` lists the owner's jobs with optional `status`, `platform`, and `creator_profile_id` filters, applied before `limit`/`offset` pagination. `GET /api/v1/schedule-jobs/{job_id}` returns one owned job; missing or foreign jobs return 404. Both reads are also available under `/api/v1/publish/schedule-jobs`. Invalid status values and empty or over-40-character platform filters return 422.
 
 ## Private approved asset storage
 

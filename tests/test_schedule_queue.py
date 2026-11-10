@@ -12,6 +12,155 @@ from app.db.models import Clip, PublishJob, PublishJobStatus, User, Video
 pytestmark = pytest.mark.asyncio
 
 
+@pytest.fixture
+async def queue_jobs(
+    login_credentials: tuple[str, str], db_session: AsyncSession
+) -> list[PublishJob]:
+    owner = (
+        await db_session.execute(select(User).where(User.email == login_credentials[0]))
+    ).scalar_one()
+    other = User(email=f"other-{uuid4().hex}@example.com", full_name="Other")
+    db_session.add(other)
+    await db_session.flush()
+    jobs = []
+    combinations = [
+        (owner, "pending", "youtube_shorts", "main"),
+        (owner, "pending", "youtube_shorts", "main"),
+        (owner, "complete", "youtube_shorts", "main"),
+        (owner, "pending", "instagram", "main"),
+        (owner, "pending", "youtube_shorts", "secondary"),
+        (other, "pending", "youtube_shorts", "main"),
+    ]
+    for index, (user, state, platform, profile) in enumerate(combinations):
+        video = Video(
+            source_url=f"local://{uuid4().hex}",
+            status="ready",
+            ingest_type="upload",
+            requested_by_user_id=user.id,
+        )
+        clip = Clip(video=video, start_sec=0, end_sec=10, status="ready")
+        db_session.add(clip)
+        await db_session.flush()
+        jobs.append(
+            PublishJob(
+                clip_id=clip.id,
+                user_id=user.id,
+                platform=platform,
+                status=state,
+                creator_profile_id=profile,
+                caption=f"Scheduled clip {index}",
+                scheduled_at=datetime.now(tz=UTC) + timedelta(days=index + 1),
+            )
+        )
+    db_session.add_all(jobs)
+    await db_session.commit()
+    return jobs
+
+
+@pytest.mark.parametrize("prefix", ["/api/v1", "/api/v1/publish"])
+async def test_get_schedule_job_is_owner_scoped(
+    async_client: AsyncClient,
+    auth_headers: dict[str, str],
+    queue_jobs: list[PublishJob],
+    prefix: str,
+) -> None:
+    job = queue_jobs[0]
+    response = await async_client.get(f"{prefix}/schedule-jobs/{job.id}", headers=auth_headers)
+    assert response.status_code == 200
+    result = response.json()
+    assert result["id"] == job.id
+    assert result["clip_id"] == job.clip_id
+    assert result["caption"] == job.caption
+    assert result["creator_profile_id"] == "main"
+    assert result["status"] == "pending"
+    assert result["platform"] == "youtube_shorts"
+
+    foreign = await async_client.get(
+        f"{prefix}/schedule-jobs/{queue_jobs[-1].id}", headers=auth_headers
+    )
+    missing = await async_client.get(
+        f"{prefix}/schedule-jobs/{queue_jobs[-1].id + 1}", headers=auth_headers
+    )
+    assert foreign.status_code == missing.status_code == 404
+    assert (
+        foreign.json()
+        == missing.json()
+        == {"error": {"code": 404, "message": "Schedule job not found"}}
+    )
+
+
+@pytest.mark.parametrize("prefix", ["/api/v1", "/api/v1/publish"])
+@pytest.mark.parametrize(
+    "case",
+    [
+        ({"status": "pending"}, [0, 1, 3, 4]),
+        ({"platform": "youtube_shorts"}, [0, 1, 2, 4]),
+        ({"status": "complete", "platform": "youtube_shorts"}, [2]),
+        ({"status": "complete", "platform": "instagram"}, []),
+        ({"platform": "unknown-platform"}, []),
+        (
+            {"status": "pending", "platform": "youtube_shorts", "creator_profile_id": "main"},
+            [0, 1],
+        ),
+        (
+            {
+                "status": "pending",
+                "platform": "youtube_shorts",
+                "creator_profile_id": "main",
+                "limit": "1",
+                "offset": "1",
+            },
+            [1],
+        ),
+    ],
+)
+async def test_schedule_queue_filters_compose_with_owner_profile_and_pagination(
+    *,
+    async_client: AsyncClient,
+    auth_headers: dict[str, str],
+    queue_jobs: list[PublishJob],
+    prefix: str,
+    case: tuple[dict[str, str], list[int]],
+) -> None:
+    params, expected = case
+    response = await async_client.get(
+        f"{prefix}/schedule-jobs", params=params, headers=auth_headers
+    )
+    assert response.status_code == 200
+    assert [job["id"] for job in response.json()] == [queue_jobs[index].id for index in expected]
+
+
+@pytest.mark.parametrize("prefix", ["/api/v1", "/api/v1/publish"])
+@pytest.mark.parametrize(
+    "params", [{"status": "invalid"}, {"platform": ""}, {"platform": "x" * 41}]
+)
+async def test_schedule_queue_rejects_invalid_filters(
+    async_client: AsyncClient,
+    auth_headers: dict[str, str],
+    prefix: str,
+    params: dict[str, str],
+) -> None:
+    response = await async_client.get(
+        f"{prefix}/schedule-jobs", params=params, headers=auth_headers
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/v1/schedule-jobs",
+        "/api/v1/schedule-jobs/1",
+        "/api/v1/publish/schedule-jobs",
+        "/api/v1/publish/schedule-jobs/1",
+    ],
+)
+async def test_schedule_queue_reads_require_authentication(
+    async_client: AsyncClient, path: str
+) -> None:
+    assert (await async_client.get(path)).status_code == 401
+
+
 async def test_owner_queue_reschedule_cancel_and_idempotent_cancel(
     async_client: AsyncClient,
     auth_headers: dict[str, str],

@@ -6,9 +6,9 @@ import signal
 from contextlib import suppress
 
 from app.db.base import get_engine, get_sessionmaker
+from app.services.asset_storage import validate_storage_configuration
 from app.services.publish_adapters import configured_adapters
 from app.services.publish_execution import reconcile_due_once, run_due_once
-from app.services.asset_storage import validate_storage_configuration
 
 logger = logging.getLogger(__name__)
 POLL_SECONDS = 30

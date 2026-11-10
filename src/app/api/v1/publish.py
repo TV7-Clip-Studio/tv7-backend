@@ -71,17 +71,25 @@ async def _owned_job(job_id: int, user: User, session: AsyncSession) -> PublishJ
     return job
 
 
+@router.get("/publish/schedule-jobs", response_model=list[PublishJobRead])
 @router.get("/schedule-jobs", response_model=list[PublishJobRead])
-async def list_schedule_jobs(
+async def list_schedule_jobs(  # noqa: PLR0913 -- pagination, filters and FastAPI dependencies
+    *,
     limit: int = Query(default=100, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     creator_profile_id: str | None = Query(default=None, min_length=1, max_length=80),
+    status: PublishJobStatus | None = Query(default=None),
+    platform: str | None = Query(default=None, min_length=1, max_length=40),
     session: AsyncSession = Depends(get_session),
     user: User = Depends(require_jwt_user),
 ) -> list[PublishJobRead]:
     query = select(PublishJob).where(PublishJob.user_id == user.id)
     if creator_profile_id is not None:
         query = query.where(PublishJob.creator_profile_id == creator_profile_id)
+    if status is not None:
+        query = query.where(PublishJob.status == status.value)
+    if platform is not None:
+        query = query.where(PublishJob.platform == platform)
     jobs = (
         (
             await session.execute(
@@ -92,6 +100,17 @@ async def list_schedule_jobs(
         .all()
     )
     return [PublishJobRead.model_validate(job, from_attributes=True) for job in jobs]
+
+
+@router.get("/publish/schedule-jobs/{job_id}", response_model=PublishJobRead)
+@router.get("/schedule-jobs/{job_id}", response_model=PublishJobRead)
+async def get_schedule_job(
+    job_id: int,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(require_jwt_user),
+) -> PublishJobRead:
+    job = await _owned_job(job_id, user, session)
+    return PublishJobRead.model_validate(job, from_attributes=True)
 
 
 @router.patch("/schedule-jobs/{job_id}", response_model=PublishJobRead)
