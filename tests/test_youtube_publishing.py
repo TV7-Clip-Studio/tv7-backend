@@ -30,6 +30,79 @@ from app.services.youtube_publish import YouTubePublishAdapter
 pytestmark = pytest.mark.asyncio
 
 
+async def test_multiple_youtube_connections_select_exact_channel(  # noqa: PLR0913
+    monkeypatch: pytest.MonkeyPatch,
+    async_client: AsyncClient,
+    auth_headers: dict[str, str],
+    login_credentials: tuple[str, str],
+    db_session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    monkeypatch.setattr(settings, "YOUTUBE_TOKEN_ENCRYPTION_KEYS", Fernet.generate_key().decode())
+    user = (
+        await db_session.execute(select(User).where(User.email == login_credentials[0]))
+    ).scalar_one()
+    suffix = uuid4().hex
+    channels = [f"UCpersonal{suffix}", f"UCbusiness{suffix}"]
+    for channel, profile, token in zip(
+        channels, ("personal", "business"), ("personal-token", "business-token"), strict=True
+    ):
+        db_session.add(
+            YouTubeCredential(
+                user_id=user.id,
+                creator_profile_id=profile,
+                access_token=youtube_oauth.encrypt_secret(token),
+                refresh_token=youtube_oauth.encrypt_secret(f"{token}-refresh"),
+                token_encryption_version=1,
+                channel_id=channel,
+                channel_title=profile.title(),
+                expires_at=datetime.now(tz=UTC) + timedelta(days=1),
+            )
+        )
+    await db_session.commit()
+
+    all_connections = await async_client.get("/api/v1/youtube/connections", headers=auth_headers)
+    assert all_connections.status_code == 200
+    assert [item["account_ref"] for item in all_connections.json()] == [
+        f"youtube:{channel}" for channel in channels
+    ]
+    assert (
+        await async_client.get("/api/v1/youtube/connection", headers=auth_headers)
+    ).status_code == 409
+    selected = await async_client.get(
+        "/api/v1/youtube/connection",
+        params={"account_ref": f"youtube:{channels[1]}"},
+        headers=auth_headers,
+    )
+    assert selected.json()["creator_profile_id"] == "business"
+    targets = await async_client.get(
+        "/api/v1/publishing-targets",
+        params={"creator_profile_id": "personal"},
+        headers=auth_headers,
+    )
+    assert [item["account_ref"] for item in targets.json()] == [f"youtube:{channels[0]}"]
+    assert {item["platform"] for item in targets.json()} == {"youtube_shorts"}
+
+    adapter = YouTubePublishAdapter(session_factory)
+    for channel, token in zip(channels, ("personal-token", "business-token"), strict=True):
+        assert (
+            await adapter.resolve_target(user.id, f"youtube:{channel}")
+        ).provider_account_id == channel
+        assert await adapter._access_token(user.id, f"youtube:{channel}") == token
+
+    assert (
+        await async_client.delete("/api/v1/youtube/connection", headers=auth_headers)
+    ).status_code == 409
+    removed = await async_client.delete(
+        "/api/v1/youtube/connection",
+        params={"account_ref": f"youtube:{channels[0]}"},
+        headers=auth_headers,
+    )
+    assert removed.status_code == 204
+    remaining = await async_client.get("/api/v1/youtube/connections", headers=auth_headers)
+    assert [item["account_ref"] for item in remaining.json()] == [f"youtube:{channels[1]}"]
+
+
 async def test_youtube_oauth_and_worker_publish_with_verified_receipt(  # noqa: PLR0913, PLR0915
     monkeypatch: pytest.MonkeyPatch,
     async_client: AsyncClient,
@@ -49,6 +122,7 @@ async def test_youtube_oauth_and_worker_publish_with_verified_receipt(  # noqa: 
     monkeypatch.setattr(settings, "SCHEDULED_ASSET_STORAGE_DIR", str(tmp_path / "assets"))
 
     calls: list[str] = []
+    authorized_channel = ["UCowner"]
 
     def google(request: httpx.Request) -> httpx.Response:
         calls.append(f"{request.method} {request.url.path}")
@@ -60,13 +134,16 @@ async def test_youtube_oauth_and_worker_publish_with_verified_receipt(  # noqa: 
                     "access_token": "google-access-token",
                     "refresh_token": "google-refresh-token",
                     "expires_in": 3600,
-                    "scope": f"{youtube_oauth.UPLOAD_SCOPE} {youtube_oauth.READ_SCOPE}",
+                    "scope": f"{youtube_oauth.UPLOAD_SCOPE} {youtube_oauth.READ_SCOPE} {youtube_oauth.UPDATE_SCOPE}",
                 },
             )
         if request.url.path == "/youtube/v3/channels":
             assert request.headers["authorization"] == "Bearer google-access-token"
             return httpx.Response(
-                200, json={"items": [{"id": "UCowner", "snippet": {"title": "Owner channel"}}]}
+                200,
+                json={
+                    "items": [{"id": authorized_channel[0], "snippet": {"title": "Owner channel"}}]
+                },
             )
         if request.url.path == "/upload/youtube/v3/videos" and request.method == "POST":
             assert request.headers["authorization"] == "Bearer google-access-token"
@@ -100,7 +177,9 @@ async def test_youtube_oauth_and_worker_publish_with_verified_receipt(  # noqa: 
     monkeypatch.setattr(youtube_oauth, "_client", mock_client)
     monkeypatch.setattr(youtube_publish, "_client", mock_client)
 
-    start = await async_client.post("/api/v1/youtube/connect", headers=auth_headers)
+    start = await async_client.post(
+        "/api/v1/youtube/connect", json={"creator_profile_id": "profile-one"}, headers=auth_headers
+    )
     assert start.status_code == 200, start.text
     authorization_url = start.json()["authorization_url"]
     query = parse_qs(urlsplit(authorization_url).query)
@@ -112,12 +191,14 @@ async def test_youtube_oauth_and_worker_publish_with_verified_receipt(  # noqa: 
     )
     assert completed.status_code == 200, completed.text
     assert completed.json()["channel_id"] == "UCowner"
+    assert completed.json()["creator_profile_id"] == "profile-one"
     replay = await async_client.get(
         "/api/v1/youtube/callback", params={"state": state, "code": "grant"}
     )
     assert replay.status_code == 400
     own_connection = await async_client.get("/api/v1/youtube/connection", headers=auth_headers)
     assert own_connection.json()["connected"] is True
+    assert own_connection.json()["creator_profile_id"] == "profile-one"
     config = await async_client.get("/api/v1/config", headers=auth_headers)
     assert config.json()["allowed_platforms"] == ["youtube_shorts"]
 
@@ -187,10 +268,28 @@ async def test_youtube_oauth_and_worker_publish_with_verified_receipt(  # noqa: 
     assert any(call.startswith("PUT /upload/youtube/v3/videos") for call in calls)
     with pytest.raises(PermanentPublishError, match="not connected"):
         await YouTubePublishAdapter(session_factory).resolve_target(user.id, "youtube:UCforeign")
-    deleted = await async_client.delete("/api/v1/youtube/connection", headers=auth_headers)
+    authorized_channel[0] = "UCsecond"
+    second_start = await async_client.post(
+        "/api/v1/youtube/connect", json={"creator_profile_id": "profile-two"}, headers=auth_headers
+    )
+    second_state = parse_qs(urlsplit(second_start.json()["authorization_url"]).query)["state"][0]
+    second_callback = await async_client.get(
+        "/api/v1/youtube/callback", params={"state": second_state, "code": "second-grant"}
+    )
+    assert second_callback.status_code == 200, second_callback.text
+    connections = await async_client.get("/api/v1/youtube/connections", headers=auth_headers)
+    assert {item["account_ref"] for item in connections.json()} == {
+        "youtube:UCowner",
+        "youtube:UCsecond",
+    }
+    deleted = await async_client.delete(
+        "/api/v1/youtube/connection",
+        params={"account_ref": "youtube:UCowner"},
+        headers=auth_headers,
+    )
     assert deleted.status_code == 204
-    disconnected = await async_client.get("/api/v1/youtube/connection", headers=auth_headers)
-    assert disconnected.json()["connected"] is False
+    remaining = await async_client.get("/api/v1/youtube/connections", headers=auth_headers)
+    assert [item["account_ref"] for item in remaining.json()] == ["youtube:UCsecond"]
 
 
 async def test_uncertain_youtube_upload_reconciles_without_duplicate_post(  # noqa: PLR0913

@@ -32,6 +32,29 @@ from app.services.publish_adapters import youtube_publishing_ready
 router = APIRouter(dependencies=[Depends(require_jwt_user)])
 
 
+@router.get("/publishing-targets")
+async def list_publishing_targets(
+    creator_profile_id: str | None = Query(default=None, min_length=1, max_length=80),
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(require_jwt_user),
+) -> list[dict[str, str | bool]]:
+    query = select(YouTubeCredential).where(YouTubeCredential.user_id == user.id)
+    if creator_profile_id is not None:
+        query = query.where(YouTubeCredential.creator_profile_id == creator_profile_id)
+    credentials = (await session.execute(query.order_by(YouTubeCredential.id))).scalars().all()
+    return [
+        {
+            "platform": "youtube_shorts",
+            "account_ref": f"youtube:{credential.channel_id}",
+            "display_name": credential.channel_title or credential.channel_id,
+            "creator_profile_id": credential.creator_profile_id or "",
+            "publishing_ready": youtube_publishing_ready(),
+        }
+        for credential in credentials
+        if credential.token_encryption_version == 1 and credential.channel_id
+    ]
+
+
 def _future_utc(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise HTTPException(status_code=422, detail="scheduled_at must include a timezone")
@@ -52,17 +75,17 @@ async def _owned_job(job_id: int, user: User, session: AsyncSession) -> PublishJ
 async def list_schedule_jobs(
     limit: int = Query(default=100, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    creator_profile_id: str | None = Query(default=None, min_length=1, max_length=80),
     session: AsyncSession = Depends(get_session),
     user: User = Depends(require_jwt_user),
 ) -> list[PublishJobRead]:
+    query = select(PublishJob).where(PublishJob.user_id == user.id)
+    if creator_profile_id is not None:
+        query = query.where(PublishJob.creator_profile_id == creator_profile_id)
     jobs = (
         (
             await session.execute(
-                select(PublishJob)
-                .where(PublishJob.user_id == user.id)
-                .order_by(PublishJob.scheduled_at, PublishJob.id)
-                .limit(limit)
-                .offset(offset)
+                query.order_by(PublishJob.scheduled_at, PublishJob.id).limit(limit).offset(offset)
             )
         )
         .scalars()
@@ -192,16 +215,26 @@ async def create_schedule_draft(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     if not available:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
-    if payload.platform == "youtube_shorts" and youtube_publishing_ready():
+    if payload.platform == "youtube_shorts" and (
+        youtube_publishing_ready() or payload.creator_profile_id is not None
+    ):
         credential = (
             await session.execute(
-                select(YouTubeCredential).where(YouTubeCredential.user_id == user.id)
+                select(YouTubeCredential).where(
+                    YouTubeCredential.user_id == user.id,
+                    YouTubeCredential.channel_id
+                    == payload.target_account_ref.removeprefix("youtube:"),
+                )
             )
         ).scalar_one_or_none()
         if (
             credential is None
             or credential.token_encryption_version != 1
             or payload.target_account_ref != f"youtube:{credential.channel_id}"
+            or (
+                payload.creator_profile_id is not None
+                and credential.creator_profile_id != payload.creator_profile_id
+            )
         ):
             raise HTTPException(status_code=404, detail="YouTube target not connected")
 
@@ -211,6 +244,7 @@ async def create_schedule_draft(
         asset_id=asset.id,
         platform=payload.platform,
         target_account_ref=payload.target_account_ref,
+        creator_profile_id=payload.creator_profile_id,
         caption=payload.caption,
         scheduled_at=scheduled_at,
         idempotency_key=payload.idempotency_key,
@@ -246,6 +280,7 @@ def _matching_draft(
         or job.asset_id != payload.asset_id
         or job.platform != payload.platform
         or job.target_account_ref != payload.target_account_ref
+        or job.creator_profile_id != payload.creator_profile_id
         or job.caption != payload.caption
         or job_time != scheduled_at
     ):

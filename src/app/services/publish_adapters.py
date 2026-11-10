@@ -7,6 +7,17 @@ from app.services.youtube_oauth import YouTubeOAuthError, oauth_configured, toke
 from app.services.youtube_publish import YouTubePublishAdapter
 
 
+def youtube_local_scheduling_ready() -> bool:
+    """Direct uploads use provider release times, independently of the cloud worker."""
+    if not (settings.YOUTUBE_API_AUDIT_APPROVED and oauth_configured()):
+        return False
+    try:
+        token_cipher()
+    except YouTubeOAuthError:
+        return False
+    return True
+
+
 def youtube_publishing_ready() -> bool:
     if not (
         settings.YOUTUBE_PUBLISH_ENABLED

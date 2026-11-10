@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.security import hash_password
-from app.db.models import Clip, User, Video
+from app.db.models import Clip, User, Video, YouTubeCredential
 
 pytestmark = pytest.mark.asyncio
 
@@ -102,8 +102,9 @@ async def test_private_asset_and_schedule_draft_are_owner_scoped(  # noqa: PLR09
 
     scheduled_at = (datetime.now(tz=UTC) + timedelta(days=1)).isoformat()
     payload = {
-        "platform": "youtube_shorts",
-        "target_account_ref": "future-connected-channel",
+        "platform": "instagram",
+        "target_account_ref": "instagram:odenelbarrio",
+        "creator_profile_id": "personal",
         "scheduled_at": scheduled_at,
         "caption": "A clip ready for approval",
         "asset_id": asset["asset_id"],
@@ -122,8 +123,18 @@ async def test_private_asset_and_schedule_draft_are_owner_scoped(  # noqa: PLR09
     assert job["status"] == "pending"
     assert job["asset_id"] == asset["asset_id"]
     assert job["target_account_ref"] == payload["target_account_ref"]
+    assert job["creator_profile_id"] == "personal"
     assert job["caption"] == payload["caption"]
     assert job["scheduled_at"] is not None
+    own_profile_queue = await async_client.get(
+        "/api/v1/schedule-jobs?creator_profile_id=personal", headers=auth_headers
+    )
+    assert [item["id"] for item in own_profile_queue.json()] == [job["id"]]
+    empty_profile_queue = await async_client.get(
+        "/api/v1/schedule-jobs?creator_profile_id=other", headers=auth_headers
+    )
+    assert empty_profile_queue.json() == []
+    assert (await async_client.get("/api/v1/publishing-targets", headers=auth_headers)).json() == []
     assert (await async_client.post(endpoint, json=payload, headers=auth_headers)).json()[
         "id"
     ] == job["id"]
@@ -189,3 +200,47 @@ async def test_schedule_draft_validates_time_and_asset_ownership(
         endpoint, json={**base, "scheduled_at": future}, headers=auth_headers
     )
     assert missing_asset.status_code == HTTPStatus.NOT_FOUND
+
+
+async def test_verified_youtube_target_is_assigned_to_one_profile(
+    async_client: AsyncClient,
+    auth_headers: dict[str, str],
+    login_credentials: tuple[str, str],
+    db_session: AsyncSession,
+) -> None:
+    user = (
+        await db_session.execute(select(User).where(User.email == login_credentials[0]))
+    ).scalar_one()
+    db_session.add(
+        YouTubeCredential(
+            user_id=user.id,
+            access_token="encrypted-test-token",
+            refresh_token="encrypted-test-refresh",
+            token_encryption_version=1,
+            channel_id="UCowned",
+            channel_title="Owned channel",
+            expires_at=datetime.now(tz=UTC) + timedelta(days=1),
+        )
+    )
+    await db_session.commit()
+    available = await async_client.get("/api/v1/publishing-targets", headers=auth_headers)
+    assert available.status_code == HTTPStatus.OK
+    assert available.json()[0]["account_ref"] == "youtube:UCowned"
+    before = await async_client.get(
+        "/api/v1/publishing-targets?creator_profile_id=personal", headers=auth_headers
+    )
+    assert before.json() == []
+    assigned = await async_client.put(
+        "/api/v1/youtube/connection/profile",
+        json={"creator_profile_id": "personal"},
+        headers=auth_headers,
+    )
+    assert assigned.status_code == HTTPStatus.OK, assigned.text
+    own = await async_client.get(
+        "/api/v1/publishing-targets?creator_profile_id=personal", headers=auth_headers
+    )
+    assert own.json()[0]["display_name"] == "Owned channel"
+    other = await async_client.get(
+        "/api/v1/publishing-targets?creator_profile_id=other", headers=auth_headers
+    )
+    assert other.json() == []

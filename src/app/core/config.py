@@ -60,6 +60,14 @@ class Settings(BaseSettings):
     YOUTUBE_CLIENT_SECRET: str | None = None
     YOUTUBE_REDIRECT_URI: str | None = None
     YOUTUBE_TOKEN_ENCRYPTION_KEYS: str | None = None
+    SOCIAL_TOKEN_ENCRYPTION_KEYS: str | None = None
+    INSTAGRAM_CLIENT_ID: str | None = None
+    INSTAGRAM_CLIENT_SECRET: str | None = None
+    INSTAGRAM_REDIRECT_URI: str | None = None
+    INSTAGRAM_API_VERSION: str = "v24.0"
+    TIKTOK_CLIENT_KEY: str | None = None
+    TIKTOK_CLIENT_SECRET: str | None = None
+    TIKTOK_REDIRECT_URI: str | None = None
     YOUTUBE_PUBLISH_ENABLED: bool = False
     YOUTUBE_API_AUDIT_APPROVED: bool = False
     UPLOAD_MAX_FILE_SIZE_MB: int = 4096

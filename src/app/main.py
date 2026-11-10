@@ -11,6 +11,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.admin import router as admin_router
 from app.api.v1.routes import api_router
+from app.api.v1.youtube import legacy_callback_router
 from app.core.config import settings
 from app.core.errors import install_exception_handlers
 from app.core.logging import setup_logging
@@ -62,6 +63,7 @@ install_exception_handlers(app)
 # API
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(admin_router)
+app.include_router(legacy_callback_router)
 
 
 # Utility endpoints

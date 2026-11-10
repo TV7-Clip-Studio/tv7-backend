@@ -19,6 +19,7 @@ from app.db.models import YouTubeCredential, YouTubeOAuthState
 
 UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
 READ_SCOPE = "https://www.googleapis.com/auth/youtube.readonly"
+UPDATE_SCOPE = "https://www.googleapis.com/auth/youtube.force-ssl"
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 CHANNEL_URL = "https://www.googleapis.com/youtube/v3/channels"
@@ -72,7 +73,9 @@ def _client() -> httpx.AsyncClient:
     return httpx.AsyncClient(timeout=30)
 
 
-async def start_authorization(session: AsyncSession, user_id: int) -> str:
+async def start_authorization(
+    session: AsyncSession, user_id: int, creator_profile_id: str | None = None
+) -> str:
     if not oauth_configured():
         raise YouTubeOAuthError("YouTube OAuth is not configured")
     state = secrets.token_urlsafe(32)
@@ -84,6 +87,7 @@ async def start_authorization(session: AsyncSession, user_id: int) -> str:
         YouTubeOAuthState(
             state_hash=hashlib.sha256(state.encode()).hexdigest(),
             user_id=user_id,
+            creator_profile_id=creator_profile_id,
             code_verifier_encrypted=encrypt_secret(verifier),
             expires_at=datetime.now(tz=UTC) + timedelta(minutes=10),
         )
@@ -94,15 +98,55 @@ async def start_authorization(session: AsyncSession, user_id: int) -> str:
             "client_id": settings.YOUTUBE_CLIENT_ID,
             "redirect_uri": settings.YOUTUBE_REDIRECT_URI,
             "response_type": "code",
-            "scope": f"{UPLOAD_SCOPE} {READ_SCOPE}",
+            "scope": f"{UPLOAD_SCOPE} {READ_SCOPE} {UPDATE_SCOPE}",
             "access_type": "offline",
-            "prompt": "consent",
+            "prompt": "select_account consent",
             "state": state,
             "code_challenge": challenge,
             "code_challenge_method": "S256",
         }
     )
     return f"{AUTH_URL}?{query}"
+
+
+async def _existing_channel_credential(
+    session: AsyncSession, user_id: int, channel_id: str, timestamp: datetime
+) -> YouTubeCredential:
+    credential = (
+        await session.execute(
+            select(YouTubeCredential).where(YouTubeCredential.channel_id == channel_id)
+        )
+    ).scalar_one_or_none()
+    if credential is not None and credential.user_id != user_id:
+        raise YouTubeOAuthError("YouTube channel is already connected to another account")
+    if credential is None:
+        credential = YouTubeCredential(
+            user_id=user_id,
+            access_token="",
+            refresh_token="",
+            expires_at=timestamp,
+            channel_id=channel_id,
+        )
+        session.add(credential)
+    return credential
+
+
+def _validate_channel_identity(channels: object) -> None:
+    if not channels:
+        raise YouTubeOAuthError(
+            "Google authorized an identity with no YouTube channel (0 channels returned). "
+            "Connect again, choose the Google account that owns your channel, then select "
+            "the YouTube Brand Account rather than the personal Google identity."
+        )
+    if not isinstance(channels, list) or any(
+        not isinstance(channel, dict) or not channel.get("id") for channel in channels
+    ):
+        raise YouTubeOAuthError("YouTube returned invalid channel identity data; reconnect")
+    if len(channels) != 1:
+        raise YouTubeOAuthError(
+            f"Google authorized {len(channels)} YouTube channels. Connect again and select "
+            "one YouTube Brand Account. TV7 will not choose a publishing channel for you."
+        )
 
 
 async def complete_authorization(session: AsyncSession, state: str, code: str) -> YouTubeCredential:
@@ -142,8 +186,10 @@ async def complete_authorization(session: AsyncSession, state: str, code: str) -
             raise YouTubeOAuthError("Google rejected the authorization code")
         token = token_response.json()
         granted = set(str(token.get("scope", "")).split())
-        if not {UPLOAD_SCOPE, READ_SCOPE}.issubset(granted):
-            raise YouTubeOAuthError("YouTube upload and channel read scopes were not granted")
+        if not {UPLOAD_SCOPE, READ_SCOPE, UPDATE_SCOPE}.issubset(granted):
+            raise YouTubeOAuthError(
+                "YouTube upload, channel read and video update permissions were not granted"
+            )
         access_token = str(token.get("access_token", ""))
         if not access_token:
             raise YouTubeOAuthError("Google did not return an access token")
@@ -155,19 +201,14 @@ async def complete_authorization(session: AsyncSession, state: str, code: str) -
         if channel_response.status_code != HTTPStatus.OK:
             raise YouTubeOAuthError("YouTube channel ownership could not be verified")
         channels = channel_response.json().get("items", [])
-        if len(channels) != 1 or not channels[0].get("id"):
-            raise YouTubeOAuthError("Exactly one YouTube channel must be available to this grant")
+        _validate_channel_identity(channels)
     channel_id = str(channels[0]["id"])
-    credential = (
-        await session.execute(
-            select(YouTubeCredential).where(YouTubeCredential.user_id == row.user_id)
-        )
-    ).scalar_one_or_none()
-    if credential is None:
-        credential = YouTubeCredential(
-            user_id=row.user_id, access_token="", refresh_token="", expires_at=timestamp
-        )
-        session.add(credential)
+    credential = await _existing_channel_credential(session, row.user_id, channel_id, timestamp)
+    if (
+        credential.creator_profile_id is not None
+        and credential.creator_profile_id != row.creator_profile_id
+    ):
+        raise YouTubeOAuthError("This YouTube channel is already linked to a different profile")
     refresh = token.get("refresh_token")
     if (
         not refresh
@@ -181,6 +222,8 @@ async def complete_authorization(session: AsyncSession, state: str, code: str) -
     credential.refresh_token = encrypt_secret(str(refresh))
     credential.token_encryption_version = 1
     credential.channel_id = channel_id
+    if row.creator_profile_id is not None:
+        credential.creator_profile_id = row.creator_profile_id
     credential.channel_title = str(channels[0].get("snippet", {}).get("title", ""))[:255]
     credential.token_type = "Bearer"
     credential.scope = " ".join(sorted(granted))

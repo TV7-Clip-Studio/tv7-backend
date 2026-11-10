@@ -189,6 +189,7 @@ class PublishJobRead(BaseModel):
     asset_id: int | None = None
     scheduled_at: datetime | None = None
     target_account_ref: str | None = None
+    creator_profile_id: str | None = None
     caption: str | None = None
     idempotency_key: str | None = None
     attempt_count: int = 0
@@ -226,6 +227,7 @@ class PublishRequest(BaseModel):
 class ScheduleDraftRequest(BaseModel):
     platform: Literal["youtube_shorts", "tiktok", "instagram"]
     target_account_ref: str = Field(min_length=1, max_length=255)
+    creator_profile_id: str | None = Field(default=None, min_length=1, max_length=80)
     scheduled_at: datetime
     caption: str = Field(default="", max_length=5000)
     asset_id: int

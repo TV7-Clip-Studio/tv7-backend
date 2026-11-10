@@ -14,7 +14,7 @@ from uuid import uuid4
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.db.models import PublishJob, PublishJobStatus, UploadedAsset
+from app.db.models import PublishJob, PublishJobStatus, UploadedAsset, YouTubeCredential
 from app.services.asset_storage import AssetNotFoundError, AssetStorageError, materialize_asset
 
 logger = logging.getLogger(__name__)
@@ -314,6 +314,21 @@ async def run_due_once(
     try:
         async with session_factory() as session:
             asset = await session.get(UploadedAsset, job.asset_id)
+            if job.platform == "youtube_shorts" and job.creator_profile_id is not None:
+                credential = (
+                    await session.execute(
+                        select(YouTubeCredential).where(
+                            YouTubeCredential.user_id == job.user_id,
+                            YouTubeCredential.channel_id
+                            == job.target_account_ref.removeprefix("youtube:"),
+                        )
+                    )
+                ).scalar_one_or_none()
+                if credential is None or credential.creator_profile_id != job.creator_profile_id:
+                    raise PermanentPublishError(
+                        "PROFILE_TARGET_MISMATCH",
+                        "YouTube account is no longer assigned to this creator profile",
+                    )
         if asset is None or asset.user_id != job.user_id:
             raise PermanentPublishError(
                 "ASSET_UNAVAILABLE", "Scheduled asset is not owned by this user"
@@ -417,6 +432,22 @@ async def reconcile_due_once(
     assert job.user_id is not None and job.target_account_ref is not None
     adapter = reconcilable[job.platform]
     try:
+        if job.platform == "youtube_shorts" and job.creator_profile_id is not None:
+            async with session_factory() as session:
+                credential = (
+                    await session.execute(
+                        select(YouTubeCredential).where(
+                            YouTubeCredential.user_id == job.user_id,
+                            YouTubeCredential.channel_id
+                            == job.target_account_ref.removeprefix("youtube:"),
+                        )
+                    )
+                ).scalar_one_or_none()
+                if credential is None or credential.creator_profile_id != job.creator_profile_id:
+                    raise PermanentPublishError(
+                        "PROFILE_TARGET_MISMATCH",
+                        "YouTube account is no longer assigned to this creator profile",
+                    )
         target = await adapter.resolve_target(job.user_id, job.target_account_ref)
         receipt = await adapter.reconcile(job, target)  # type: ignore[attr-defined]
     except Exception:

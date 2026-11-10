@@ -245,6 +245,26 @@ async def test_worker_rejects_wrong_target_without_provider_call(
     assert job.remote_post_id is None
 
 
+async def test_worker_rejects_profile_target_mismatch_before_provider_call(
+    db_session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "SCHEDULED_ASSET_STORAGE_DIR", str(tmp_path))
+    asset_path = tmp_path / "profile.mp4"
+    asset_path.write_bytes(b"approved bytes")
+    job = await make_due_job(db_session, asset_path)
+    job.creator_profile_id = "personal"
+    await db_session.commit()
+    adapter = ReceiptAdapter()
+    assert await run_due_once(session_factory, {"youtube_shorts": adapter}) == 1
+    await db_session.refresh(job)
+    assert adapter.calls == 0
+    assert job.status == PublishJobStatus.FAILED.value
+    assert job.last_error_code == "PROFILE_TARGET_MISMATCH"
+
+
 async def test_receipt_without_remote_id_needs_reconciliation(
     db_session: AsyncSession,
     session_factory: async_sessionmaker[AsyncSession],

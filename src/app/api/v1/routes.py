@@ -2,7 +2,19 @@ from fastapi import APIRouter, Depends
 
 from app.deps.security import require_jwt_user
 
-from . import auth, clips, cloud_ai, config, publish, uploads, users, videos, youtube
+from . import (
+    auth,
+    clips,
+    cloud_ai,
+    config,
+    local_youtube_uploads,
+    publish,
+    social,
+    uploads,
+    users,
+    videos,
+    youtube,
+)
 
 api_router = APIRouter()
 
@@ -45,3 +57,9 @@ api_router.include_router(
     prefix="/cloud-ai",
 )
 api_router.include_router(youtube.router, tags=["youtube"], prefix="/youtube")
+
+api_router.include_router(social.router, tags=["social"], prefix="/social")
+
+api_router.include_router(
+    local_youtube_uploads.router, tags=["youtube-local-uploads"], prefix="/youtube/local-uploads"
+)

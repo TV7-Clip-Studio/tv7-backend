@@ -140,9 +140,8 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
-    youtube_credential: Mapped[YouTubeCredential | None] = relationship(
+    youtube_credentials: Mapped[list[YouTubeCredential]] = relationship(
         back_populates="user",
-        uselist=False,
         cascade="all, delete-orphan",
     )
     cloud_ai_credit_transactions: Mapped[list[CloudAiCreditTransaction]] = relationship(
@@ -354,6 +353,7 @@ class PublishJob(Base):
         DateTime(timezone=True), nullable=True, index=True
     )
     target_account_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    creator_profile_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
     caption: Mapped[str | None] = mapped_column(Text, nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     attempt_count: Mapped[int] = mapped_column(
@@ -418,7 +418,7 @@ class YouTubeCredential(Base):
         Integer,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        unique=True,
+        index=True,
     )
     access_token: Mapped[str] = mapped_column(String(2048), nullable=False)
     refresh_token: Mapped[str] = mapped_column(String(2048), nullable=False)
@@ -427,6 +427,7 @@ class YouTubeCredential(Base):
     )
     channel_id: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True)
     channel_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    creator_profile_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     token_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     scope: Mapped[str | None] = mapped_column(String(512), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -437,7 +438,7 @@ class YouTubeCredential(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
-    user: Mapped[User] = relationship(back_populates="youtube_credential")
+    user: Mapped[User] = relationship(back_populates="youtube_credentials")
 
 
 class YouTubeOAuthState(Base):
@@ -447,6 +448,77 @@ class YouTubeOAuthState(Base):
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
+    creator_profile_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     code_verifier_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SocialCredential(Base):
+    __tablename__ = "social_credentials"
+    __table_args__ = (UniqueConstraint("platform", "provider_account_id"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    platform: Mapped[str] = mapped_column(String(20))
+    provider_account_id: Mapped[str] = mapped_column(String(128))
+    display_name: Mapped[str] = mapped_column(String(255))
+    creator_profile_id: Mapped[str] = mapped_column(String(80))
+    access_token_encrypted: Mapped[str] = mapped_column(Text)
+    refresh_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    scope: Mapped[str] = mapped_column(String(512))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    refresh_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class SocialOAuthState(Base):
+    __tablename__ = "social_oauth_states"
+    state_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    platform: Mapped[str] = mapped_column(String(20))
+    creator_profile_id: Mapped[str] = mapped_column(String(80))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LocalYouTubeUpload(Base):
+    """Provider upload metadata; source/clip bytes never enter Backend."""
+
+    __tablename__ = "local_youtube_uploads"
+    __table_args__ = (
+        UniqueConstraint("user_id", "idempotency_key", name="uq_local_youtube_owner_key"),
+        UniqueConstraint(
+            "user_id",
+            "creator_profile_id",
+            "target_account_ref",
+            "checksum_sha256",
+            "size_bytes",
+            "content_type",
+            name="uq_local_youtube_render_target",
+        ),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    creator_profile_id: Mapped[str] = mapped_column(String(80), index=True)
+    target_account_ref: Mapped[str] = mapped_column(String(255))
+    local_clip_id: Mapped[str] = mapped_column(String(255))
+    idempotency_key: Mapped[str] = mapped_column(String(128))
+    title: Mapped[str] = mapped_column(String(100))
+    description: Mapped[str] = mapped_column(Text)
+    size_bytes: Mapped[int] = mapped_column(BigInteger)
+    checksum_sha256: Mapped[str] = mapped_column(String(64))
+    content_type: Mapped[str] = mapped_column(String(64))
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="initiating")
+    provider_upload_uri_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    remote_video_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

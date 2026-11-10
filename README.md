@@ -60,3 +60,21 @@ When enabled, the separate worker uses YouTube's [resumable upload protocol](htt
 - Fast unit suite: `make test`
 - Coverage gate: `make testcov`
 - Integration containers (Postgres) are not required; tests run against in-memory SQLite.
+
+## Standalone source checkout
+
+Python 3.12.12 or newer is required. The unit tests use in-memory SQLite and mocked provider calls; Docker, social accounts, cloud credentials, and media files are not required.
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -e ".[dev]"
+make SKIP_CORE=1 lint
+make SKIP_CORE=1 type
+make SKIP_CORE=1 test
+```
+
+`SKIP_CORE=1` omits sibling Core Makefile includes; it does not disable lint, typing, tests, or coverage. A normal multi-repository checkout can omit it. The configured 85% coverage threshold includes both application and test code, so it is not a claim of 85% application-only coverage.
+
+For an isolated development database, set `DATABASE_ADMIN_URL=sqlite+pysqlite:////absolute/path/to/disposable.sqlite` and run `.venv/bin/alembic upgrade head`. Do not run migration commands against real data without a backup. Migration `f5a8b21c670d` rejects existing duplicate local-upload records instead of deleting provider receipts. Downgrading to a single YouTube channel per owner requires resolving multiple channel connections first.
+
+See [social connections](docs/social-connections.md) and [local YouTube uploads](docs/local-youtube-uploads.md) for profile scoping, transfer authorization, reconciliation, and provider setup. Instagram and TikTok publishing executors remain unavailable. Tests with mocked providers do not establish live OAuth, upload, scheduling, or publishing readiness.

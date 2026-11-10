@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 import httpx
 from sqlalchemy import select, update
@@ -37,12 +37,22 @@ def _client() -> httpx.AsyncClient:
 
 
 def _valid_session_uri(uri: str) -> bool:
-    parsed = urlsplit(uri)
-    return (
-        parsed.scheme == "https"
-        and parsed.hostname == "www.googleapis.com"
-        and parsed.path.startswith("/upload/youtube/v3/videos")
-    )
+    try:
+        parsed = urlsplit(uri)
+        upload_ids = parse_qs(parsed.query).get("upload_id", [])
+        return (
+            parsed.scheme == "https"
+            and parsed.hostname == "www.googleapis.com"
+            and parsed.path == "/upload/youtube/v3/videos"
+            and parsed.username is None
+            and parsed.password is None
+            and parsed.port is None
+            and not parsed.fragment
+            and len(upload_ids) == 1
+            and bool(upload_ids[0])
+        )
+    except ValueError:
+        return False
 
 
 async def _asset_chunks(path: Path) -> AsyncIterator[bytes]:
@@ -58,19 +68,26 @@ class YouTubePublishAdapter:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self.session_factory = session_factory
 
-    async def _credential(self, user_id: int) -> YouTubeCredential:
+    async def _credential(self, user_id: int, account_ref: str) -> YouTubeCredential:
+        if not account_ref.startswith("youtube:"):
+            raise PermanentPublishError("TARGET_MISMATCH", "Invalid YouTube target")
         async with self.session_factory() as session:
             row = (
                 await session.execute(
-                    select(YouTubeCredential).where(YouTubeCredential.user_id == user_id)
+                    select(YouTubeCredential).where(
+                        YouTubeCredential.user_id == user_id,
+                        YouTubeCredential.channel_id == account_ref.removeprefix("youtube:"),
+                    )
                 )
             ).scalar_one_or_none()
             if row is None or row.token_encryption_version != 1 or not row.channel_id:
-                raise PermanentPublishError("YOUTUBE_NOT_CONNECTED", "Connect a YouTube channel")
+                raise PermanentPublishError(
+                    "YOUTUBE_NOT_CONNECTED", "YouTube channel is not connected to this owner"
+                )
             return row
 
     async def resolve_target(self, user_id: int, account_ref: str) -> VerifiedTarget:
-        credential = await self._credential(user_id)
+        credential = await self._credential(user_id, account_ref)
         expected = f"youtube:{credential.channel_id}"
         if account_ref != expected:
             raise PermanentPublishError(
@@ -78,12 +95,15 @@ class YouTubePublishAdapter:
             )
         return VerifiedTarget(user_id, "youtube_shorts", account_ref, credential.channel_id or "")
 
-    async def _access_token(self, user_id: int) -> str:
+    async def _access_token(self, user_id: int, account_ref: str) -> str:
         async with self.session_factory() as session:
             credential = (
                 await session.execute(
                     select(YouTubeCredential)
-                    .where(YouTubeCredential.user_id == user_id)
+                    .where(
+                        YouTubeCredential.user_id == user_id,
+                        YouTubeCredential.channel_id == account_ref.removeprefix("youtube:"),
+                    )
                     .with_for_update()
                 )
             ).scalar_one_or_none()
@@ -164,7 +184,7 @@ class YouTubePublishAdapter:
     ) -> ProviderReceipt:
         del idempotency_key  # YouTube has no idempotency key; persisted session prevents blind replay.
         assert job.user_id is not None
-        token = await self._access_token(job.user_id)
+        token = await self._access_token(job.user_id, target.account_ref)
         size = asset_path.stat().st_size
         content_type = "video/mp4" if asset_path.suffix.lower() == ".mp4" else "video/quicktime"
         title = (job.caption or "TV7 clip").splitlines()[0][:100] or "TV7 clip"
@@ -226,7 +246,7 @@ class YouTubePublishAdapter:
 
     async def reconcile(self, job: PublishJob, target: VerifiedTarget) -> ProviderReceipt | None:
         assert job.user_id is not None
-        token = await self._access_token(job.user_id)
+        token = await self._access_token(job.user_id, target.account_ref)
         video_id = job.remote_post_id
         if not video_id and job.provider_upload_uri_encrypted:
             uri = decrypt_secret(job.provider_upload_uri_encrypted)
