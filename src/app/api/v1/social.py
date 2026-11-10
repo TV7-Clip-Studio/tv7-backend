@@ -120,7 +120,7 @@ def completion_html(platform: str, success: bool, message: str) -> HTMLResponse:
 
 
 @router.get("/{platform}/callback", response_model=None)
-async def callback(  # noqa: PLR0913 -- provider callback query and FastAPI dependencies
+async def callback(  # noqa: PLR0913, PLR0917 -- provider callback query and FastAPI dependencies
     platform: Platform,
     request: Request,
     state: str = Query(min_length=32, max_length=256),

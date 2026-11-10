@@ -62,7 +62,7 @@ async def local_target(monkeypatch, db_session, login_credentials):
     }
 
 
-def provider(  # noqa: PLR0913 -- provider test scenarios
+def provider(  # noqa: PLR0913, PLR0917 -- provider test scenarios
     monkeypatch,
     payload,
     *,
@@ -120,7 +120,7 @@ def provider(  # noqa: PLR0913 -- provider test scenarios
 @pytest.mark.asyncio
 async def test_private_upload_metadata_only_and_idempotent(
     async_client, auth_headers, local_target, db_session, monkeypatch
-):  # noqa: PLR0913
+):  # noqa: PLR0913, PLR0917
     calls = []
     provider(monkeypatch, local_target, initiation_calls=calls)
     before = await db_session.scalar(select(func.count()).select_from(UploadedAsset))
@@ -163,7 +163,7 @@ async def test_private_upload_metadata_only_and_idempotent(
 @pytest.mark.parametrize("completed", [False, True])
 async def test_new_browser_key_reuses_identical_render(
     async_client, auth_headers, local_target, monkeypatch, completed
-):  # noqa: PLR0913
+):  # noqa: PLR0913, PLR0917
     calls = []
     provider(monkeypatch, local_target, initiation_calls=calls)
     created = (await async_client.post(BASE, headers=auth_headers, json=local_target)).json()
@@ -265,7 +265,7 @@ async def test_incomplete_upload_preserves_session_for_resume(
 @pytest.mark.asyncio
 async def test_profile_and_owner_isolation(
     async_client, auth_headers, local_target, monkeypatch, db_session
-):  # noqa: PLR0913
+):  # noqa: PLR0913, PLR0917
     wrong_profile = await async_client.post(
         BASE, headers=auth_headers, json={**local_target, "creator_profile_id": "wrong-profile"}
     )
@@ -579,7 +579,7 @@ async def test_database_rejects_concurrent_duplicate_render(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("upload_status", ["scheduled", "processing"])
-async def test_clear_schedule_keeps_video_private_and_is_profile_scoped(  # noqa: PLR0913 -- independent provider scenarios and fixtures
+async def test_clear_schedule_keeps_video_private_and_is_profile_scoped(  # noqa: PLR0913, PLR0917 -- independent provider scenarios and fixtures
     async_client, auth_headers, local_target, db_session, monkeypatch, upload_status
 ):
     provider(monkeypatch, local_target)

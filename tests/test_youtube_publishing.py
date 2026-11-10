@@ -30,7 +30,7 @@ from app.services.youtube_publish import YouTubePublishAdapter
 pytestmark = pytest.mark.asyncio
 
 
-async def test_multiple_youtube_connections_select_exact_channel(  # noqa: PLR0913
+async def test_multiple_youtube_connections_select_exact_channel(  # noqa: PLR0913, PLR0917
     monkeypatch: pytest.MonkeyPatch,
     async_client: AsyncClient,
     auth_headers: dict[str, str],
@@ -103,7 +103,7 @@ async def test_multiple_youtube_connections_select_exact_channel(  # noqa: PLR09
     assert [item["account_ref"] for item in remaining.json()] == [f"youtube:{channels[1]}"]
 
 
-async def test_youtube_oauth_and_worker_publish_with_verified_receipt(  # noqa: PLR0913, PLR0915
+async def test_youtube_oauth_and_worker_publish_with_verified_receipt(  # noqa: PLR0913, PLR0917, PLR0915
     monkeypatch: pytest.MonkeyPatch,
     async_client: AsyncClient,
     auth_headers: dict[str, str],
@@ -292,7 +292,7 @@ async def test_youtube_oauth_and_worker_publish_with_verified_receipt(  # noqa: 
     assert [item["account_ref"] for item in remaining.json()] == ["youtube:UCsecond"]
 
 
-async def test_uncertain_youtube_upload_reconciles_without_duplicate_post(  # noqa: PLR0913
+async def test_uncertain_youtube_upload_reconciles_without_duplicate_post(  # noqa: PLR0913, PLR0917
     monkeypatch: pytest.MonkeyPatch,
     login_credentials: tuple[str, str],
     db_session: AsyncSession,

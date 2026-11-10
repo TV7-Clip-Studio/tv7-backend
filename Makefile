@@ -65,7 +65,7 @@ endif
 deps:
 	@[ -d $(VENV) ] || python -m venv $(VENV)
 	@$(PIP) -q install --upgrade pip
-	@$(PIP) -q install -e ".[dev]"
+	@$(PIP) -q install -c requirements-dev.lock -e ".[dev]"
 	@$(VENV)/bin/pre-commit install
 
 core-init:

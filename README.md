@@ -63,11 +63,11 @@ When enabled, the separate worker uses YouTube's [resumable upload protocol](htt
 
 ## Standalone source checkout
 
-Python 3.12.12 or newer is required. The unit tests use in-memory SQLite and mocked provider calls; Docker, social accounts, cloud credentials, and media files are not required.
+The package requires Python 3.12.12 or newer; the source snapshot and dependency constraints were validated with Python 3.12.12. The unit tests use in-memory SQLite and mocked provider calls; Docker, social accounts, cloud credentials, and media files are not required.
 
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install -e ".[dev]"
+.venv/bin/python -m pip install -c requirements-dev.lock -e ".[dev]"
 make SKIP_CORE=1 lint
 make SKIP_CORE=1 type
 make SKIP_CORE=1 test

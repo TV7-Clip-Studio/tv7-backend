@@ -17,7 +17,7 @@ from app.db.models import Clip, User, Video, YouTubeCredential
 pytestmark = pytest.mark.asyncio
 
 
-async def test_private_asset_and_schedule_draft_are_owner_scoped(  # noqa: PLR0913, PLR0915
+async def test_private_asset_and_schedule_draft_are_owner_scoped(  # noqa: PLR0913, PLR0917, PLR0915
     async_client: AsyncClient,
     auth_headers: dict[str, str],
     login_credentials: tuple[str, str],
