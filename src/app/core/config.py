@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "TV7"
     APP_ENV: str = "dev"
     DEBUG: bool = True
-    VERSION: str = "0.1.0"
+    VERSION: str = "0.2.0"
     CORS_ORIGINS: list[str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
